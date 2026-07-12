@@ -71,3 +71,10 @@ docker-data/
 
 # TypeScript
 *.tsbuildinfo
+
+
+packages/dashboard/.next/
+packages/dashboard/out/
+
+# GitHub Pages
+.github/pages/
