@@ -1,4 +1,4 @@
-// packages/dashboard/src/app/flood/page.tsx
+//  path  packages/dashboard/src/app/flood/page.tsx
 'use client'
 
 import Navigation from '@/components/shared/Navigation'
