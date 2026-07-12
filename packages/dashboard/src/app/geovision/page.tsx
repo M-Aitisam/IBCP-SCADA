@@ -1,7 +1,7 @@
 // packages/dashboard/src/app/geovision/page.tsx
 'use client'
 
-import Navigation from '@/components/shared/Navigation.tsx'
+import Navigation from '@/components/shared/Navigation'
 import { 
   Map, 
   TrendingUp, 
