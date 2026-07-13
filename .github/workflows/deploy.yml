@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - main
+      - develop
+      - geovision
+      
     paths:
       - 'packages/dashboard/**'
       - '.github/workflows/deploy.yml'
