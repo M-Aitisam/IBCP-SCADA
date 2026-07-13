@@ -5,8 +5,8 @@ on:
   push:
     branches:
       - main
-      - develop
       - geovision
+      - develop
       
     paths:
       - 'packages/dashboard/**'
