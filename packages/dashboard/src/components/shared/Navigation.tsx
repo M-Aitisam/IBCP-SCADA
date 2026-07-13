@@ -1,27 +1,21 @@
 // packages/dashboard/src/components/shared/Navigation.tsx
 'use client'
 
+import { useAuth } from '@/context/AuthContext'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { 
-  LayoutDashboard, 
-  Satellite, 
-  Droplets, 
-  Sprout,
-  Bell,
-  User,
-  ChevronLeft
-} from 'lucide-react'
-
-const navItems = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'GeoVision AI', href: '/geovision', icon: Satellite },
-  { name: 'Flood SCADA', href: '/flood', icon: Droplets },
-  { name: 'Soil Monitoring', href: '/soil', icon: Sprout },
-]
+import { LayoutDashboard, Satellite, Droplets, Sprout, LogOut, User } from 'lucide-react'
 
 export default function Navigation() {
+  const { user, logout } = useAuth()
   const pathname = usePathname()
+
+  const navItems = [
+    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'GeoVision AI', href: '/geovision', icon: Satellite },
+    { name: 'Flood SCADA', href: '/flood', icon: Droplets },
+    { name: 'Soil Monitoring', href: '/soil', icon: Sprout },
+  ]
 
   return (
     <nav className="bg-white/80 backdrop-blur-sm border-b border-gray-200/50 px-4 py-3 sticky top-0 z-50">
@@ -57,32 +51,17 @@ export default function Navigation() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button className="relative p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
-          </button>
-          <button className="flex items-center gap-2 p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
-            <User className="w-5 h-5" />
+          <span className="text-sm text-gray-600 hidden md:block">
+            {user?.full_name || user?.username}
+          </span>
+          <button
+            onClick={logout}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            <span className="hidden md:inline">Logout</span>
           </button>
         </div>
-      </div>
-
-      {/* Mobile Navigation */}
-      <div className="md:hidden flex justify-between mt-2 pt-2 border-t border-gray-100">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={`flex flex-col items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium transition-all
-                ${isActive ? 'text-blue-600' : 'text-gray-500'}`}
-            >
-              <item.icon className={`w-5 h-5 ${isActive ? 'text-blue-500' : 'text-gray-400'}`} />
-              <span className={isActive ? 'text-blue-600' : ''}>{item.name}</span>
-            </Link>
-          )
-        })}
       </div>
     </nav>
   )
