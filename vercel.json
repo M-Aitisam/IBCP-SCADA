@@ -1,7 +1,7 @@
 {
   "builds": [
     {
-      "src": "packages/backend/app/main.py",
+      "src": "packages/backend/index.py",
       "use": "@vercel/python",
       "config": {
         "installCommand": "pip install -r packages/backend/requirements.txt"
@@ -15,8 +15,9 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "packages/backend/app/main.py"
+      "dest": "packages/backend/index.py"
     },
+    { "handle": "filesystem" },
     {
       "src": "/(.*)",
       "dest": "packages/dashboard/$1"
