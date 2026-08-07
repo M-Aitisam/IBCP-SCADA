@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { LayoutDashboard, Satellite, Droplets, Sprout, LogOut, User, LogIn } from 'lucide-react'
+import ThemeToggle from './ThemeToggle'
 
 export default function Navigation() {
   const { user, logout, isAuthenticated } = useAuth()
@@ -51,6 +52,7 @@ export default function Navigation() {
         </div>
 
         <div className="flex items-center gap-3">
+          <ThemeToggle />
           {isAuthenticated ? (
             <>
               <span className="text-sm text-gray-600 hidden md:block">
