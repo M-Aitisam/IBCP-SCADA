@@ -142,6 +142,19 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+@router.get("/google/debug-config")
+async def google_debug_config():
+    """Temporary diagnostic: confirms which GOOGLE_REDIRECT_URI/FRONTEND_URL the
+    deployed function actually resolved at runtime. No secrets returned.
+    Remove once the Vercel env var propagation issue is confirmed fixed."""
+    return {
+        "google_redirect_uri": settings.GOOGLE_REDIRECT_URI,
+        "frontend_url": settings.FRONTEND_URL,
+        "google_client_id_set": bool(settings.GOOGLE_CLIENT_ID),
+        "google_client_secret_set": bool(settings.GOOGLE_CLIENT_SECRET),
+    }
+
+
 @router.get("/google")
 async def google_login(db: AsyncSession = Depends(get_db)):
     """Redirect to Google's OAuth consent screen"""
