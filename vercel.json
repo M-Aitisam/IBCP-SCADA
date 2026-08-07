@@ -17,6 +17,7 @@
       "src": "/api/(.*)",
       "dest": "packages/backend/app/main.py"
     },
+    { "handle": "filesystem" },
     {
       "src": "/(.*)",
       "dest": "packages/dashboard/$1"
