@@ -1,12 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  output: 'export',  // ← Important: Static export for GitHub Pages
+  output: 'export', // static export — the dashboard has no server-side Next.js routes, the API lives in packages/backend
   images: {
-    unoptimized: true,  // ← Required for static export
+    unoptimized: true, // required for static export
   },
-  basePath: process.env.NODE_ENV === 'production' ? '/IBCP-SCADA' : '',
-  assetPrefix: process.env.NODE_ENV === 'production' ? '/IBCP-SCADA' : '',
   trailingSlash: true,
 }
 

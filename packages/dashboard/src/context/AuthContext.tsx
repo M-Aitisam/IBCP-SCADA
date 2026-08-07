@@ -35,6 +35,7 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   login: (username: string, password: string) => Promise<void>
+  loginWithToken: (token: string, user: User) => void
   register: (data: any) => Promise<void>
   logout: () => Promise<void>
   isAuthenticated: boolean
@@ -86,6 +87,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push('/dashboard')
   }
 
+  const loginWithToken = (token: string, userData: User) => {
+    setToken(token)
+    setUser(userData)
+    setUserState(userData)
+    router.push('/dashboard')
+  }
+
   const register = async (data: any) => {
     try {
       // Send registration data
@@ -120,6 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       login,
+      loginWithToken,
       register,
       logout,
       isAuthenticated: !!user
