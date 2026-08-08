@@ -187,7 +187,7 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
 
     oauth_error = request.query_params.get("error")
     if oauth_error:
-        return RedirectResponse(url=f"{settings.FRONTEND_URL}/auth/callback?error={oauth_error}")
+        return RedirectResponse(url=f"{settings.FRONTEND_URL}/auth/callback/?error={oauth_error}")
 
     code = request.query_params.get("code")
     state = request.query_params.get("state")
@@ -236,7 +236,7 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
         # An account with this email already exists via password signup —
         # don't silently take it over; the owner must link it explicitly.
         return RedirectResponse(
-            url=f"{settings.FRONTEND_URL}/auth/callback?error=account_exists_use_password"
+            url=f"{settings.FRONTEND_URL}/auth/callback/?error=account_exists_use_password"
         )
 
     if existing:
@@ -264,7 +264,7 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
     db.add(ExchangeCode(code=exchange_code, user_id=user.id, expires_at=_utcnow() + timedelta(seconds=_CODE_TTL_SECONDS)))
     await db.commit()
 
-    return RedirectResponse(url=f"{settings.FRONTEND_URL}/auth/callback?code={exchange_code}")
+    return RedirectResponse(url=f"{settings.FRONTEND_URL}/auth/callback/?code={exchange_code}")
 
 
 class ExchangeRequest(BaseModel):
