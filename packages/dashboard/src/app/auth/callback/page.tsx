@@ -1,4 +1,5 @@
 // packages/dashboard/src/app/auth/callback/page.tsx
+// this page is for testing
 'use client'
 
 import { Suspense, useEffect, useState } from 'react'
@@ -10,7 +11,7 @@ import { Loader2 } from 'lucide-react'
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
 
 const ERROR_MESSAGES: Record<string, string> = {
-  account_exists_use_password: 'An account with this email already exists. Please sign in with your username and password instead.',
+  account_exists_use_password: 'An account with this email already exists. Please sign in with your username and password. ', 
 }
 
 function AuthCallbackInner() {
