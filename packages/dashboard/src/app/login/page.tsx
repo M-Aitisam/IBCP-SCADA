@@ -27,6 +27,7 @@ export default function LoginPage() {
       setError(err.response?.data?.detail || 'Login failed')
     } finally {
       setLoading(false)
+      /// router.push('/') //// testing
     }
   }
 
