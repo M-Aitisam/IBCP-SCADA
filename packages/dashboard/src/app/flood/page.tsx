@@ -2,9 +2,10 @@
 'use client'
 
 import Navigation from '@/components/shared/Navigation'
+import ProtectedRoute from '@/components/shared/ProtectedRoute'
 import { Droplets, AlertTriangle, Clock, Radio, Gauge } from 'lucide-react'
 
-export default function FloodPage() {
+function FloodContent() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -23,5 +24,13 @@ export default function FloodPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function FloodPage() {
+  return (
+    <ProtectedRoute>
+      <FloodContent />
+    </ProtectedRoute>
   )
 }

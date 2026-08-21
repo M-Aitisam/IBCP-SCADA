@@ -3,10 +3,11 @@
 
 import { useAuth } from '@/context/AuthContext'
 import Navigation from '@/components/shared/Navigation'
+import ProtectedRoute from '@/components/shared/ProtectedRoute'
 import Link from 'next/link'
 import { Satellite, Droplets, Sprout, ArrowRight } from 'lucide-react'
 
-export default function DashboardPage() {
+function DashboardContent() {
   const { user } = useAuth()
 
   const projects = [
@@ -85,5 +86,13 @@ export default function DashboardPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function DashboardPage() {
+  return (
+    <ProtectedRoute>
+      <DashboardContent />
+    </ProtectedRoute>
   )
 }

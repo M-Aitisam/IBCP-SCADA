@@ -197,7 +197,7 @@ export default function Home() {
             <div>
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-full text-sm text-blue-700 font-medium mb-6 animate-fade-in-up">
                 <Zap className="w-4 h-4 text-blue-500" />
-                Pakistan's First Cyber-Physical SCADA System
+                Pakistan&apos;s First Cyber-Physical SCADA System
               </div>
 
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 leading-[1.1] mb-6 animate-fade-in-up animation-delay-200">
@@ -208,7 +208,7 @@ export default function Home() {
               </h1>
 
               <p className="text-lg text-gray-600 mb-8 animate-fade-in-up animation-delay-400 max-w-lg">
-                Pakistan's first integrated cyber-physical SCADA system for flood management,
+                Pakistan&apos;s first integrated cyber-physical SCADA system for flood management,
                 water distribution, and agricultural monitoring across the Indus Basin.
               </p>
 
@@ -292,7 +292,7 @@ export default function Home() {
               Why <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">IBCP-SCADA?</span>
             </h2>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Built for Pakistan's agricultural future with cutting-edge technology
+              Built for Pakistan&apos;s agricultural future with cutting-edge technology
             </p>
           </div>
 

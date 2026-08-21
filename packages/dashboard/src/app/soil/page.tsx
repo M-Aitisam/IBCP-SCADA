@@ -2,9 +2,10 @@
 'use client'
 
 import Navigation from '@/components/shared/Navigation'
+import ProtectedRoute from '@/components/shared/ProtectedRoute'
 import { Sprout, AlertTriangle, Gauge, Droplets } from 'lucide-react'
 
-export default function SoilPage() {
+function SoilContent() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -23,5 +24,13 @@ export default function SoilPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function SoilPage() {
+  return (
+    <ProtectedRoute>
+      <SoilContent />
+    </ProtectedRoute>
   )
 }
