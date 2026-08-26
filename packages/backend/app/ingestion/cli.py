@@ -6,6 +6,7 @@
     python -m app.ingestion.cli test-run [--days N] [--regions N] [--dry-run]
     python -m app.ingestion.cli availability
     python -m app.ingestion.cli check-config
+    python -m app.ingestion.cli analytics [--date YYYY-MM-DD] [--stage NAME] [--resume RUN_ID]
 
 Deliberately never imported by app.main: the Vercel HTTP function must not be
 able to trigger a ten-year backfill, and nothing here should run at app start.
@@ -49,6 +50,28 @@ async def _run(args: argparse.Namespace) -> int:
 
     if args.command == "check-config":
         return _check_config()
+
+    if args.command == "analytics":
+        # Deliberately handled before any Earth Engine work: the analytics
+        # cascade reads and writes the database only. Requiring GEE
+        # credentials to recompute a drought score would be a false
+        # dependency, and would stop the cascade being re-runnable anywhere.
+        from app.intelligence import orchestrator
+
+        async with AsyncSessionLocal() as session:
+            cycle = await orchestrator.run_cycle(
+                session,
+                reference_date=args.date,
+                run_id=args.resume,
+                only=args.stage,
+                resume=bool(args.resume),
+            )
+        print()
+        print(cycle.render())
+        if args.json:
+            print()
+            print(json.dumps(cycle.to_json(), indent=2, default=str))
+        return 1 if cycle.status == "failed" else 0
 
     settings = ingestion_settings
     if getattr(args, "regions", None):
@@ -243,20 +266,57 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub.add_parser("check-config", help="show configuration and verify GEE auth")
 
+    analytics = sub.add_parser(
+        "analytics",
+        help="run the analytics cascade (quality, baselines, features, hazards, alerts, brief)",
+    )
+    analytics.add_argument(
+        "--date",
+        type=lambda v: __import__("datetime").date.fromisoformat(v),
+        help="reference date (default: today, UTC)",
+    )
+    analytics.add_argument(
+        "--stage",
+        action="append",
+        help="limit to one stage (repeatable)",
+    )
+    analytics.add_argument(
+        "--resume",
+        help="resume an existing run id, skipping stages that already succeeded",
+    )
+
     return parser
+
+
+async def _run_and_dispose(args: argparse.Namespace) -> int:
+    """Run the command, then release the pool inside the same loop."""
+    try:
+        return await _run(args)
+    finally:
+        await engine.dispose()
 
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     configure_logging(args.verbose)
     for attr, default in (("dry_run", False), ("dataset", None), ("regions", None),
-                          ("days", None), ("restart", False), ("force", False)):
+                          ("days", None), ("restart", False), ("force", False),
+                          ("date", None), ("stage", None), ("resume", None)):
         if not hasattr(args, attr):
             setattr(args, attr, default)
-    try:
-        return asyncio.run(_run(args))
-    finally:
-        asyncio.run(engine.dispose())
+    # One event loop for the work AND the disposal.
+    #
+    # The previous shape — asyncio.run(_run(...)) followed by
+    # asyncio.run(engine.dispose()) in a finally — creates two loops. A pooled
+    # asyncpg connection is bound to the loop that opened it, so disposing in
+    # the second loop tries to close sockets belonging to a loop that no longer
+    # exists and fails with "'NoneType' object has no attribute 'send'".
+    #
+    # It was invisible while the engine used NullPool (nothing survived to be
+    # disposed) and appeared as soon as pooling became the default outside
+    # serverless. The work had already committed, so this only ever produced a
+    # noisy traceback — but in CI a traceback reads as a failed run.
+    return asyncio.run(_run_and_dispose(args))
 
 
 if __name__ == "__main__":

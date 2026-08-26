@@ -57,6 +57,22 @@ class Settings(BaseSettings):
     # GEE
     GEE_PROJECT: Optional[str] = None
 
+    # Ingestion control.
+    #
+    # The API never runs ingestion in-process: the backend deploys as a Vercel
+    # serverless function with a seconds-long execution budget, and a backfill
+    # runs for hours. Triggering instead dispatches the GitHub Actions workflow
+    # that already owns the nightly schedule, so there is one execution path
+    # rather than two that can disagree.
+    #
+    # Unset is a valid state: the trigger endpoints then report that remote
+    # dispatch is not configured and hand back the CLI command, which is more
+    # useful than a generic 500.
+    GITHUB_REPOSITORY: Optional[str] = None  # "owner/repo"
+    GITHUB_DISPATCH_TOKEN: Optional[str] = None  # PAT with `actions: write`
+    GITHUB_WORKFLOW_FILE: str = "gee-daily-ingestion.yml"
+    GITHUB_WORKFLOW_REF: str = "main"
+
     # Google OAuth
     GOOGLE_CLIENT_ID: Optional[str] = None
     GOOGLE_CLIENT_SECRET: Optional[str] = None

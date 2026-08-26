@@ -16,6 +16,7 @@ from app.ingestion.gee_client import GEEPermanentError, classify_error
 from app.ingestion.pipeline import (
     STATUS_FAILED,
     STATUS_PARTIAL,
+    STATUS_SKIPPED_LOCKED,
     STATUS_SUCCESS,
     IngestionPipeline,
 )
@@ -382,3 +383,96 @@ async def test_render_shows_availability_and_totals(store):
     assert "2026-07-12" in text
     assert "NOT fabricated" in text
     assert "Status: SUCCESS" in text
+
+
+# --- concurrent-run protection (job locking) --------------------------------
+
+
+@pytest.mark.asyncio
+async def test_locked_dataset_is_skipped_not_failed(store):
+    """A dataset another run already holds is skipped, and the rest proceed.
+
+    Contention is a normal operational state — the nightly cron overlapping a
+    manual backfill, say — so it must not read as a failure and must not stop
+    the other datasets.
+    """
+    store.locked = {"chirps"}
+    pipeline = build(
+        store, records_by_dataset={name: records_for(name) for name in DATASETS}
+    )
+    result = await pipeline.run(mode="daily", today=date(2026, 8, 21))
+
+    by_dataset = {o.dataset: o for o in result.outcomes}
+    assert by_dataset["chirps"].status == STATUS_SKIPPED_LOCKED
+    assert by_dataset["chirps"].records_inserted == 0
+    for name in ("sentinel2", "mod13q1", "mod11a2", "sentinel1"):
+        assert by_dataset[name].status == STATUS_SUCCESS
+        assert by_dataset[name].records_inserted > 0
+
+    # The whole run is still a success: nothing went wrong.
+    assert result.status == STATUS_SUCCESS
+    assert result.totals["datasets_failed"] == 0
+    assert result.totals["datasets_skipped_locked"] == 1
+
+
+@pytest.mark.asyncio
+async def test_a_locked_dataset_is_never_queried(store):
+    """The lock is checked before any GEE work, not after."""
+    store.locked = set(DATASETS)
+    stub_records = {name: records_for(name) for name in DATASETS}
+    roi = make_roi(2)
+    stub = StubExtractor(roi, records_by_dataset=stub_records)
+    pipeline = IngestionPipeline(
+        store=store,
+        client=FakeClient(),
+        roi=roi,
+        extractor=stub,
+        settings=narrow_settings(),
+    )
+    result = await pipeline.run(mode="daily", today=date(2026, 8, 21))
+
+    # No chunk was requested and nothing was written.
+    assert stub.chunks_requested == []
+    assert store.rows == {}
+    # Every dataset locked means the run itself did no work, and says so
+    # rather than reporting a hollow success.
+    assert result.status == STATUS_SKIPPED_LOCKED
+
+
+@pytest.mark.asyncio
+async def test_lock_is_released_even_when_the_dataset_fails(store):
+    """A crashing dataset must not leave its lease held until expiry."""
+    pipeline = build(
+        store,
+        records_by_dataset={"chirps": records_for("chirps")},
+        fail_datasets={"chirps": RuntimeError("GEE exploded")},
+    )
+    await pipeline.run(mode="daily", today=date(2026, 8, 21), only=["chirps"])
+
+    assert store.held == {}
+    assert ("released", "chirps") in store.lock_events
+
+
+@pytest.mark.asyncio
+async def test_losing_the_lease_mid_run_stops_early_and_keeps_progress(store):
+    """If another run reclaims the lease, we stop rather than fight it.
+
+    Continuing would double GEE spend and let two writers move the same resume
+    cursor, which can rewind it. Work already committed stays committed.
+    """
+    store.lose_lock_after = 1  # first chunk renews fine, second does not
+    pipeline = build(
+        store,
+        narrow=False,  # full history, so the window spans many chunks
+        records_by_dataset={"chirps": records_for("chirps")},
+    )
+    result = await pipeline.run(
+        mode="backfill", today=date(2026, 8, 21), only=["chirps"]
+    )
+
+    outcome = result.outcomes[0]
+    assert outcome.status == STATUS_PARTIAL
+    assert "lost dataset lock" in outcome.error
+    # Exactly one chunk got through before the lease was lost.
+    assert outcome.chunks_processed == 1
+    assert store.rows, "records from the completed chunk must survive"

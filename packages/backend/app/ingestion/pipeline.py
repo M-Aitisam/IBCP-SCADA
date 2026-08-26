@@ -34,6 +34,10 @@ logger = logging.getLogger(__name__)
 STATUS_SUCCESS = "success"
 STATUS_PARTIAL = "partial_success"
 STATUS_FAILED = "failed"
+# Another run already holds this dataset's lease. Not an error: the work is
+# being done, just not by us. Counted apart from failures so a contended run
+# never pages anyone.
+STATUS_SKIPPED_LOCKED = "skipped_locked"
 
 
 @dataclass
@@ -104,6 +108,9 @@ class RunResult:
                 1 for o in self.outcomes if o.status == STATUS_SUCCESS
             ),
             "datasets_failed": sum(1 for o in self.outcomes if o.status == STATUS_FAILED),
+            "datasets_skipped_locked": sum(
+                1 for o in self.outcomes if o.status == STATUS_SKIPPED_LOCKED
+            ),
         }
 
     def render(self) -> str:
@@ -149,6 +156,11 @@ class RunResult:
         lines.append(
             f"Datasets: {totals['datasets_succeeded']}/{totals['datasets_attempted']} succeeded"
         )
+        if totals["datasets_skipped_locked"]:
+            lines.append(
+                f"Skipped:  {totals['datasets_skipped_locked']} dataset(s) locked by "
+                "another run"
+            )
         lines.append(f"Status: {self.status.upper()}")
         return "\n".join(lines)
 
@@ -217,11 +229,16 @@ class IngestionPipeline:
 
         datasets = enabled_datasets(only)
         for config in datasets:
-            outcome = await self._run_dataset(config, mode, dry_run, today)
+            outcome = await self._run_dataset(config, mode, dry_run, today, run_id)
             result.outcomes.append(outcome)
 
         totals = result.totals
-        if totals["datasets_failed"] == 0:
+        if totals["datasets_skipped_locked"] == totals["datasets_attempted"] > 0:
+            # Everything was already being handled elsewhere. Nothing went
+            # wrong, and reporting this as success would hide that this run
+            # did no work.
+            result.status = STATUS_SKIPPED_LOCKED
+        elif totals["datasets_failed"] == 0:
             result.status = STATUS_SUCCESS
         elif totals["datasets_succeeded"] == 0:
             result.status = STATUS_FAILED
@@ -261,12 +278,27 @@ class IngestionPipeline:
         mode: str,
         dry_run: bool,
         today: Optional[date],
+        run_id: str,
     ) -> DatasetOutcome:
         """Process one dataset. Never raises: failures become an outcome."""
         outcome = DatasetOutcome(dataset=config.name, asset_id=config.asset_id)
         today = today or datetime.now(timezone.utc).date()
         requested_until = self.settings.GEE_TARGET_END
         outcome.requested_until = requested_until
+
+        # Per-dataset rather than per-run: two runs covering different datasets
+        # are harmless and should not serialise behind each other.
+        lock_key = config.name
+        if not await self.store.acquire_lock(
+            lock_key, run_id, mode=mode, holder=_holder_id()
+        ):
+            outcome.status = STATUS_SKIPPED_LOCKED
+            outcome.error = "another ingestion run holds this dataset's lock"
+            outcome.window = "none (locked by another run)"
+            logger.warning(
+                "dataset=%s skipped: lock held by another run", config.name
+            )
+            return outcome
 
         try:
             # Ask the source what it actually holds before deciding the window.
@@ -301,7 +333,9 @@ class IngestionPipeline:
                 await self._save_checkpoint(config, outcome, today, mode)
                 return outcome
 
-            await self._process_window(config, window, outcome, dry_run, mode, today)
+            await self._process_window(
+                config, window, outcome, dry_run, mode, today, run_id, lock_key
+            )
 
         except GEEPermanentError as exc:
             # Configuration/asset errors: record and move on, do not retry.
@@ -314,6 +348,13 @@ class IngestionPipeline:
             outcome.error = f"{type(exc).__name__}: {exc}"
             logger.exception("dataset=%s failed; continuing with others", config.name)
             await self._record_failure(config, outcome)
+        finally:
+            # Released even on failure, so a crash costs one lease at worst
+            # rather than blocking the dataset until the lease expires.
+            try:
+                await self.store.release_lock(lock_key, run_id)
+            except Exception:  # noqa: BLE001 - never mask the real outcome
+                logger.exception("could not release lock for %s", config.name)
 
         return outcome
 
@@ -373,6 +414,8 @@ class IngestionPipeline:
         dry_run: bool,
         mode: str,
         today: date,
+        run_id: str,
+        lock_key: str,
     ) -> None:
         """Walk the window in chunks, persisting after each one.
 
@@ -385,6 +428,23 @@ class IngestionPipeline:
         latest_seen: Optional[date] = None
 
         for chunk in chunked(window, config.chunk_days):
+            # A decade-wide backfill outlives any single lease, so the lease is
+            # extended per chunk. Losing it means another run reclaimed this
+            # dataset as abandoned; continuing would duplicate its work and
+            # fight it over the resume cursor, so stop here instead.
+            if not await self.store.renew_lock(lock_key, run_id):
+                outcome.status = STATUS_PARTIAL
+                outcome.error = (
+                    "lost dataset lock mid-run (lease expired and was reclaimed); "
+                    "stopped early, progress is checkpointed"
+                )
+                logger.warning(
+                    "dataset=%s lost its lock at chunk %s; stopping early",
+                    config.name,
+                    chunk,
+                )
+                break
+
             try:
                 extracted = self.extractor.extract_chunk(config, chunk.start, chunk.end)
             except GEEPermanentError:
@@ -512,6 +572,19 @@ class IngestionPipeline:
 
 
 # ----------------------------------------------------------------------
+
+
+def _holder_id() -> str:
+    """Who holds a lock, for operator diagnostics only.
+
+    Host and pid identify a stuck run well enough to go and look at it. Never
+    used for correctness decisions — the lease expiry is what actually
+    arbitrates ownership.
+    """
+    import os
+    import socket
+
+    return f"{socket.gethostname()}/{os.getpid()}"[:128]
 
 
 def _make_run_id(mode: str) -> str:

@@ -50,10 +50,31 @@ def test_default_window_matches_the_specified_range():
     assert s.GEE_CLOUD_THRESHOLD == 20.0
 
 
-def test_default_roi_targets_the_two_provinces():
-    s = settings()
-    assert s.GEE_ROI_ASSET_ID == "FAO/GAUL/2015/level2"
+def test_roi_boundary_source_is_gaul_level2():
+    assert settings().GEE_ROI_ASSET_ID == "FAO/GAUL/2015/level2"
+
+
+def test_roi_provinces_parse_from_a_comma_list():
+    s = settings(GEE_ROI_PROVINCES="Balochistan,Sindh")
     assert s.roi_provinces == ["Balochistan", "Sindh"]
+    # Whitespace around entries is operator convenience, not part of the name.
+    assert settings(GEE_ROI_PROVINCES=" Punjab , Sindh ").roi_provinces == [
+        "Punjab",
+        "Sindh",
+    ]
+
+
+def test_empty_roi_provinces_means_every_province_in_the_country():
+    """An empty list is the country-wide selection, not a misconfiguration.
+
+    ROIResolver only applies a province filter when this list is non-empty, so
+    blank means "all 119 Pakistan districts" rather than "no regions". The
+    country filter still applies, so this never silently widens to the globe.
+    """
+    s = settings(GEE_ROI_PROVINCES="")
+    assert s.roi_provinces == []
+    assert s.GEE_ROI_COUNTRY == "Pakistan"
+    assert s.GEE_ROI_COUNTRY_PROPERTY == "ADM0_NAME"
 
 
 def test_project_id_falls_back_to_existing_core_setting(monkeypatch):

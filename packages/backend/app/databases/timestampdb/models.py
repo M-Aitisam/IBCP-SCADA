@@ -98,6 +98,18 @@ class SatelliteObservation(Base):
     quality_flag: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     cloud_percentage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
+    # Phase 4 data quality. Kept on the observation row rather than a side
+    # table: the relationship is 1:1 and every read of a value also wants to
+    # know whether to trust it, so a join would be pure overhead on the
+    # hottest table in the schema.
+    #
+    # `quality_flag` above is the older ingestion-time marker and is left
+    # alone; `quality_flags` carries the structured breakdown.
+    quality_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    quality_status: Mapped[Optional[str]] = mapped_column(String(24), nullable=True)
+    quality_flags: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    quality_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     source_image_id: Mapped[str] = mapped_column(String(255), nullable=False)
     source_product_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     spatial_resolution: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -120,6 +132,7 @@ class SatelliteObservation(Base):
             "observation_timestamp",
         ),
         Index("ix_gee_obs_source_image", "dataset", "source_image_id"),
+        Index("ix_gee_obs_quality", "dataset", "quality_status"),
     )
 
 
@@ -154,6 +167,36 @@ class IngestionRun(Base):
     errors: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
 
+class IngestionLock(Base):
+    """A lease held while one dataset is being ingested.
+
+    Prevents two runs (the nightly cron, a manual API trigger, a developer's
+    CLI) from processing the same dataset concurrently. Idempotent upserts mean
+    an overlap could not corrupt data, but it would double GEE quota spend and
+    interleave checkpoint writes, which can move a resume cursor backwards.
+
+    A *lease*, not a plain flag: a crashed run cannot release its lock, so a
+    boolean would deadlock the dataset forever. `expires_at` lets a later run
+    reclaim a lock whose holder has gone away, while a live holder renews it
+    after each chunk.
+    """
+
+    __tablename__ = "gee_ingestion_locks"
+
+    # One row per dataset; the dataset name is the lock's identity.
+    lock_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    run_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    mode: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    holder: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    acquired_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow
+    )
+    # Renewed as work progresses; a reclaim is only possible once this passes.
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+
 class IngestionCheckpoint(Base):
     """Per-dataset resume point, so a run never reprocesses the full history."""
 
@@ -185,3 +228,34 @@ class IngestionCheckpoint(Base):
     )
 
     last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+class RegionGeometryCache(Base):
+    """Persisted region boundaries for the GIS map.
+
+    Exporting 119 simplified districts from Earth Engine takes ~15 seconds. That
+    is survivable on a long-lived server with an in-process cache, but fatal on
+    serverless: every cold instance would pay it again, and Vercel's function
+    timeout is shorter than the export. The map would simply fail to load.
+
+    Boundaries change on the order of years, so the export belongs in the
+    database rather than being recomputed per instance. One row per
+    (source, simplify tolerance); the GeoJSON lives in JSONB.
+
+    This is a cache of a derived artifact, not a second region system: it is
+    generated from the same ROI configuration the ingestion pipeline reduces
+    over, and is keyed by that configuration.
+    """
+
+    __tablename__ = "gee_region_geometry"
+
+    cache_key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    source: Mapped[str] = mapped_column(String(255), nullable=False)
+    region_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    simplify_metres: Mapped[float] = mapped_column(Float, nullable=False)
+    feature_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    attribution: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    geojson: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )

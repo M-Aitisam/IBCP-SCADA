@@ -105,6 +105,20 @@ class DerivedSpec:
     bands: tuple[str, ...]
     reducer: Reducer = Reducer.MEAN
     valid_range: Optional[ValueRange] = None
+    # Applied to every input band *before* the expression is evaluated.
+    #
+    # This matters only for non-ratio indices. NDVI is a normalised difference,
+    # so any common scale factor cancels and 1.0 is correct. EVI is not: its
+    # coefficients and the "+1" in the denominator are defined against surface
+    # reflectance in [0,1], so feeding it raw S2 integers (0-10000) yields a
+    # number that is not EVI at all. Set this to the collection's reflectance
+    # scale factor for any such index.
+    band_scale: float = 1.0
+    # Cut point for mask-style indices (expression="water_mask"). The reduced
+    # MEAN of a 0/1 mask is the FRACTION of pixels satisfying it, which is how
+    # a per-pixel classification becomes a regional areal statistic without
+    # ever downloading a raster.
+    threshold: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -168,6 +182,10 @@ DATASETS: dict[str, DatasetConfig] = {
         # later module can recompute any index without re-querying GEE.
         # S2 L2A reflectance is scaled by 1e-4.
         bands=(
+            # Blue is carried for EVI, which needs it; red/nir serve NDVI and
+            # let a later module recompute any index without re-querying GEE.
+            BandSpec("B2", "reflectance_blue", "reflectance", Reducer.MEAN, 1e-4,
+                     valid_range=ValueRange(0.0, 1.6)),
             BandSpec("B4", "reflectance_red", "reflectance", Reducer.MEAN, 1e-4,
                      valid_range=ValueRange(0.0, 1.6)),
             BandSpec("B8", "reflectance_nir", "reflectance", Reducer.MEAN, 1e-4,
@@ -176,6 +194,13 @@ DATASETS: dict[str, DatasetConfig] = {
         derived=(
             DerivedSpec("ndvi", "index", "normalizedDifference", ("B8", "B4"),
                         Reducer.MEAN, NDVI_RANGE),
+            # EVI as defined by Huete et al. (2002), the same formulation MODIS
+            # MOD13Q1 ships, so the S2 and MODIS EVI series are comparable:
+            #   2.5 * (NIR - RED) / (NIR + 6*RED - 7.5*BLUE + 1)
+            # band_scale converts S2 L2A integers to reflectance first; without
+            # it the "+1" term would be meaningless against values near 10000.
+            DerivedSpec("evi", "index", "evi", ("B8", "B4", "B2"),
+                        Reducer.MEAN, EVI_RANGE, band_scale=1e-4),
         ),
         cloud_property="CLOUDY_PIXEL_PERCENTAGE",
         cloud_threshold=20.0,
@@ -235,6 +260,13 @@ DATASETS: dict[str, DatasetConfig] = {
             BandSpec("LST_Day_1km", "lst_day_c", "celsius", Reducer.MEAN, 0.02,
                      transform=kelvin_to_celsius,
                      valid_range=ValueRange(-50.0, 70.0)),
+            # Night LST shares the day band's 0.02 Kelvin scale factor. Stored
+            # as its own metric rather than averaged with day: the diurnal
+            # difference is the physically meaningful signal, and collapsing
+            # them would destroy it.
+            BandSpec("LST_Night_1km", "lst_night_c", "celsius", Reducer.MEAN, 0.02,
+                     transform=kelvin_to_celsius,
+                     valid_range=ValueRange(-60.0, 60.0)),
             BandSpec("QC_Day", "qc_day", "bitfield", Reducer.MEDIAN,
                      is_quality_band=True),
         ),
@@ -268,6 +300,35 @@ DATASETS: dict[str, DatasetConfig] = {
         ),
         property_filters=(
             ("instrumentMode", "equals", "IW"),
+        ),
+        derived=(
+            # Open water is a specular reflector: it bounces C-band radar away
+            # from the sensor, so water pixels return very low backscatter.
+            # Thresholding VV and taking the MEAN of the resulting 0/1 mask
+            # gives the FRACTION of the district that looks like water — which
+            # multiplied by the district's area is an extent in km².
+            #
+            # -15 dB is a widely used open-water cut for Sentinel-1 IW GRD in
+            # VV. It is a documented, configurable parameter rather than a
+            # tuned constant: radiometric terrain effects mean no single value
+            # is correct everywhere, and the number that matters operationally
+            # is the CHANGE against each region's own dry-season baseline, not
+            # the absolute fraction.
+            #
+            # Known limitation, stated rather than hidden: radar shadow and
+            # smooth dry surfaces (bare tarmac, some sand sheets) are also
+            # dark in VV and will be counted. Differencing against the region's
+            # own baseline removes the persistent part of that error, since
+            # those surfaces are dark in the baseline too.
+            DerivedSpec(
+                "water_fraction",
+                "fraction",
+                "water_mask",
+                ("VV",),
+                Reducer.MEAN,
+                ValueRange(0.0, 1.0),
+                threshold=-15.0,
+            ),
         ),
         chunk_days=30,
     ),

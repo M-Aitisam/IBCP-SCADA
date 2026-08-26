@@ -13,14 +13,18 @@ them as such is more useful than fabricating a score.
 from datetime import date, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import CATALOG_TTL, OBSERVATION_PREFIX, OVERVIEW_TTL, cache
 from app.core.deps import get_current_user
 from app.databases.timestampdb.models import SatelliteObservation
 from app.db.database import get_db
 from app.db.models import User
+from app.ingestion.config import ingestion_settings
+from app.services import geovision_service as gv
+from app.services import region_geometry as region_geometry_service
 
 router = APIRouter()
 
@@ -288,3 +292,413 @@ async def get_prediction(_user: User = Depends(get_current_user)):
         "detail": "No prediction model has been trained yet.",
         "predictions": None,
     }
+
+
+# ===========================================================================
+# GeoVision AI command-centre endpoints
+# ===========================================================================
+#
+# The endpoints above are the original per-metric feeds and stay as they are —
+# the existing dashboard and any external consumer still call them. What
+# follows serves the command centre, where the defining constraint is that a
+# ten-year view must not ship ten years of rows to the browser. Everything here
+# aggregates in Postgres and returns a bounded payload.
+#
+# Every response distinguishes measurement from derivation and reports
+# `data_source: "no_data"` rather than substituting a plausible-looking number.
+
+
+def _region_filter(
+    province: Optional[str] = Query(None, description="Exact province name as stored"),
+    district: Optional[str] = Query(None),
+    tehsil: Optional[str] = Query(None),
+    region_id: Optional[str] = Query(None, description="Most specific; overrides the rest"),
+) -> gv.RegionFilter:
+    """Shared cascading geography filter.
+
+    One dependency used by every endpoint below, so the map, KPIs, charts and
+    tables cannot end up filtered differently from one another.
+    """
+    return gv.RegionFilter(
+        province=province, district=district, tehsil=tehsil, region_id=region_id
+    )
+
+
+def _window(
+    range: str = Query(
+        "3m",
+        description="Named range: 7d, 30d, 3m, 6m, 1y, 5y, 10y. Ignored if start/end given.",
+    ),
+    start: Optional[date] = Query(None, description="Custom range start (inclusive)"),
+    end: Optional[date] = Query(None, description="Custom range end (inclusive)"),
+) -> gv.Window:
+    try:
+        return gv.resolve_window(range_key=range, start=start, end=end)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+
+
+@router.get("/overview")
+async def get_overview(
+    window: gv.Window = Depends(_window),
+    filters: gv.RegionFilter = Depends(_region_filter),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """KPI command centre: every headline figure with its provenance.
+
+    Cached briefly. Observations only change when the pipeline runs, so a short
+    TTL bounds staleness while absorbing the burst of requests a dashboard load
+    produces.
+    """
+    key = (
+        f"{OBSERVATION_PREFIX}overview:{window.start}:{window.end}:"
+        f"{filters.cache_key()}"
+    )
+    return await cache.get_or_set(
+        key,
+        lambda: gv.overview(db, window, filters=filters),
+        ttl=OVERVIEW_TTL,
+    )
+
+
+@router.get("/regions")
+async def get_regions(
+    window: gv.Window = Depends(_window),
+    filters: gv.RegionFilter = Depends(_region_filter),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Every region with its latest value for each summary metric.
+
+    This is what the choropleth and the vegetation table both read, so the map
+    and the table are guaranteed to agree.
+    """
+    matrix = await gv.region_metric_matrix(db, filters=filters, window=window)
+    regions = sorted(matrix.values(), key=lambda r: (r["province"] or "", r["name"]))
+    return {
+        "status": "success",
+        "data_source": "timestampdb" if regions else "no_data",
+        "count": len(regions),
+        "period": {"start": window.start.isoformat(), "end": window.end.isoformat()},
+        "metrics": list(gv.SUMMARY_METRICS),
+        "regions": regions,
+        # Sent with the data so the map legend renders the thresholds actually
+        # applied, instead of a copy that can drift.
+        "classification": {
+            "ndvi": [
+                {"min": threshold, "label": label} for threshold, label in gv.NDVI_CLASSES
+            ],
+            "crop_condition": [
+                {"min": threshold, "label": label}
+                for threshold, label in gv.CROP_CONDITION_CLASSES
+            ],
+        },
+        # The traffic-light scale, plus the rule behind each metric's colour.
+        # Two different rules are in play and the UI must be able to say which:
+        # vegetation indices are classified from the reading, while temperature
+        # and rainfall are classified from their departure from that region's
+        # own seasonal normal — there is no context-free "too hot".
+        "condition_scale": {
+            "levels": [
+                {"level": level, "label": gv.CONDITION_LABELS[level], "rank": rank}
+                for level, rank in sorted(
+                    gv.CONDITION_RANK.items(), key=lambda kv: kv[1]
+                )
+            ],
+            "value_classified_metrics": list(gv.VALUE_CLASSIFIED_METRICS),
+            "anomaly_classified_metrics": list(gv.ANOMALY_CLASSIFIED_METRICS),
+            "value_bands": [
+                {"min": threshold, "level": level}
+                for threshold, level in gv.VEGETATION_CONDITION_BANDS
+            ],
+            "anomaly_thresholds": {
+                "watch_z": gv.WATCH_Z_ADVISORY,
+                "stressed_z": gv.WATCH_Z_HIGH,
+                "critical_z": gv.WATCH_Z_CRITICAL,
+                "min_baseline_years": gv.MIN_BASELINE_YEARS,
+            },
+        },
+    }
+
+
+@router.get("/regions/hierarchy")
+async def get_region_hierarchy(
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Pakistan -> province -> district -> tehsil tree for the cascading filters.
+
+    Built from stored observations, so the filter can never offer a region the
+    database has no data for.
+    """
+    key = f"{OBSERVATION_PREFIX}hierarchy"
+    payload = await cache.get_or_set(
+        key, lambda: gv.region_hierarchy(db), ttl=CATALOG_TTL
+    )
+    return {"status": "success", **payload}
+
+
+@router.get("/regions/geometry")
+async def get_region_geometry(
+    response: Response,
+    simplify_metres: float = Query(
+        region_geometry_service.DEFAULT_SIMPLIFY_METRES,
+        ge=region_geometry_service.MIN_SIMPLIFY_METRES,
+        le=region_geometry_service.MAX_SIMPLIFY_METRES,
+        description="Server-side simplification tolerance in metres",
+    ),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Simplified region boundaries as GeoJSON, for the GIS map.
+
+    Exported from the same source the ingestion ROI uses, so every feature's
+    region_id joins directly to the observations.
+
+    Cached in three tiers — process memory, then the database, then Earth
+    Engine — and additionally at the browser, because this is by far the
+    largest response the dashboard fetches (~620 KB for 119 districts) and
+    boundaries change on the order of years. `private` rather than `public`:
+    the response is behind authentication and must not be held by a shared
+    proxy.
+    """
+    try:
+        payload = await region_geometry_service.region_geometry(simplify_metres, db=db)
+        response.headers["Cache-Control"] = "private, max-age=86400"
+        return payload
+    except region_geometry_service.GeometryUnavailable as exc:
+        # 503, not 500: the API is fine, the boundary source is not reachable,
+        # and the map should say so rather than render an empty world.
+        raise HTTPException(status_code=503, detail=str(exc)) from None
+
+
+@router.get("/region/{region_id}")
+async def get_region_detail(
+    region_id: str,
+    window: gv.Window = Depends(_window),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Everything the region detail panel shows for one region.
+
+    Current health, per-dataset latest observation, data quality, and the trend
+    for each summary metric — in one round-trip rather than one per card.
+    """
+    filters = gv.RegionFilter(region_id=region_id)
+    matrix = await gv.region_metric_matrix(db, filters=filters, window=window)
+    region = matrix.get(region_id)
+
+    if region is None:
+        # A region with no observations is a legitimate answer, not a 404: the
+        # region may exist in the ROI and simply not have been ingested yet.
+        return {
+            "status": "success",
+            "region_id": region_id,
+            "data_source": "no_data",
+            "region": None,
+            "detail": "No observations stored for this region.",
+        }
+
+    # One query for all five metrics and both periods, rather than two per
+    # metric — see batch_window_stats. This endpoint was the slowest on the
+    # dashboard purely from sequential round trips.
+    stats = await gv.batch_window_stats(
+        db, gv.SUMMARY_METRICS, window, filters=filters
+    )
+    trends = {
+        metric: gv.build_trend(
+            metric,
+            window,
+            stats.get(metric, {}).get("current"),
+            stats.get(metric, {}).get("previous"),
+        )
+        for metric in gv.SUMMARY_METRICS
+    }
+
+    # Per-dataset latest, so the panel can show "Latest Sentinel-2 / CHIRPS /
+    # MOD13Q1 ..." with the real acquisition dates.
+    dataset_rows = (
+        await db.execute(
+            select(
+                SatelliteObservation.dataset,
+                func.max(SatelliteObservation.observation_date).label("latest"),
+                func.count().label("observations"),
+                func.avg(SatelliteObservation.cloud_percentage).label("mean_cloud"),
+            )
+            .where(SatelliteObservation.region_id == region_id)
+            .group_by(SatelliteObservation.dataset)
+        )
+    ).all()
+
+    return {
+        "status": "success",
+        "data_source": "timestampdb",
+        "region_id": region_id,
+        "period": {"start": window.start.isoformat(), "end": window.end.isoformat()},
+        "region": region,
+        "trends": trends,
+        "datasets": [
+            {
+                "dataset": r.dataset,
+                "latest_observation": r.latest.isoformat() if r.latest else None,
+                "observations": r.observations,
+                "mean_cloud_percentage": round(float(r.mean_cloud), 1)
+                if r.mean_cloud is not None
+                else None,
+            }
+            for r in sorted(dataset_rows, key=lambda x: x.dataset)
+        ],
+    }
+
+
+@router.get("/trends")
+async def get_trends(
+    metric: str = Query("ndvi", description="ndvi, evi, rainfall_mm, lst_day_c, ..."),
+    dataset: Optional[str] = Query(None, description="Override the default source"),
+    window: gv.Window = Depends(_window),
+    filters: gv.RegionFilter = Depends(_region_filter),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Bucketed time series plus the period-over-period comparison.
+
+    The bucket is chosen from the span (daily / weekly / monthly), so a 10-year
+    request returns ~120 points rather than millions of rows. Buckets with no
+    source observation are absent, never zero-filled.
+    """
+    try:
+        payload = await gv.series(
+            db, metric, window, dataset=dataset, filters=filters
+        )
+        payload["trend"] = await gv.trend(
+            db, metric, window, dataset=dataset, filters=filters
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    return {"status": "success", **payload}
+
+
+@router.get("/anomaly")
+async def get_anomaly(
+    metric: str = Query("ndvi"),
+    window: gv.Window = Depends(_window),
+    filters: gv.RegionFilter = Depends(_region_filter),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Departure from the same calendar season in prior years.
+
+    A DERIVED quantity, labelled as such, reported only when enough prior years
+    exist to form a baseline. Below that it returns `insufficient_data` with the
+    reason instead of a number that would look authoritative and mean nothing.
+    """
+    try:
+        payload = await gv.anomaly(db, metric, window, filters=filters)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    return {"status": "success", **payload}
+
+
+@router.get("/datasets")
+async def get_dataset_catalog(
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Data-source catalogue: configuration joined to measured coverage.
+
+    Provider, collection, resolution and cadence are declared configuration;
+    counts and date spans are measured from the database. Nothing is estimated.
+    """
+    key = f"{OBSERVATION_PREFIX}catalog"
+    catalog = await cache.get_or_set(
+        key, lambda: gv.dataset_catalog(db), ttl=CATALOG_TTL
+    )
+    return {
+        "status": "success",
+        "count": len(catalog),
+        "datasets": catalog,
+        "boundary_source": {
+            "asset": ingestion_settings.GEE_ROI_ASSET_ID,
+            "region_type": ingestion_settings.GEE_ROI_REGION_TYPE,
+            # Stated plainly because it affects what users see on the map: GAUL
+            # 2015 predates the 2018 FATA/KP merger, so it still lists
+            # "North-West Frontier" and FATA separately, and has no
+            # Gilgit-Baltistan or AJK under the Pakistan country filter.
+            "vintage_note": (
+                "FAO GAUL 2015 administrative boundaries. Province names reflect "
+                "the pre-2018 arrangement; Gilgit-Baltistan and Azad Jammu & "
+                "Kashmir are not included in this source."
+            ),
+        },
+    }
+
+
+@router.get("/ingestion-status")
+async def get_ingestion_status(
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Per-dataset ingestion health for the monitoring panel.
+
+    A dataset with nothing new is reported as NO NEW DATA, which is a normal
+    state for a 16-day composite and must not read as a system failure.
+    """
+    catalog = await gv.dataset_catalog(db)
+    runs = await gv.recent_runs(db, limit=10)
+    return {
+        "status": "success",
+        "datasets": [
+            {
+                "dataset": d["dataset"],
+                "state": d["health"]["state"],
+                "detail": d["health"]["detail"],
+                "latest_observation": d["coverage"]["latest_observation"],
+                "earliest_observation": d["coverage"]["earliest_observation"],
+                "last_ingested_at": d["coverage"]["last_ingested_at"],
+                "last_run_at": d["last_run_at"],
+                "last_status": d["last_status"],
+                "last_error": d["last_error"],
+                "observations": d["coverage"]["observations"],
+                "regions": d["coverage"]["regions"],
+                "native_cadence": d["native_cadence"],
+                "requested_until": d["requested_until"],
+                "latest_available_at_source": d["latest_available_at_source"],
+                "availability_status": d["availability_status"],
+                "backfill_complete": d["backfill_complete"],
+                "backfill_cursor": d["backfill_cursor"],
+            }
+            for d in catalog
+        ],
+        "recent_runs": runs,
+        "states": ["HEALTHY", "WARNING", "NO NEW DATA", "NO DATA", "FAILED"],
+    }
+
+
+@router.get("/watch")
+async def get_satellite_watch(
+    window: gv.Window = Depends(_window),
+    filters: gv.RegionFilter = Depends(_region_filter),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Satellite Watch indicators.
+
+    These are analytical indicators derived from the stored observations. They
+    are NOT official disaster warnings, and every item says so along with the
+    rule and evidence behind it.
+    """
+    payload = await gv.watch_indicators(db, window, filters=filters)
+    return {"status": "success", **payload}
+
+
+@router.get("/freshness")
+async def get_data_freshness(
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Newest real observation timestamp, and how far behind now it is.
+
+    Always the observation date, never today's date — the gap is the point.
+    """
+    return {"status": "success", **await gv.data_freshness(db)}

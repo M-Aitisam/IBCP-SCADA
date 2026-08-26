@@ -32,8 +32,17 @@ export function clearSession(): void {
   }
 }
 
+// Without a timeout, axios waits forever: a hung backend leaves every panel
+// spinning with no way for the user to tell that it has failed. 30s is well
+// past the slowest normal response while still failing in human time.
+export const DEFAULT_TIMEOUT_MS = 30_000
+// The region-boundary export is the one legitimately slow call — a cold
+// deployment may have to build it from Earth Engine before it is persisted.
+export const LONG_TIMEOUT_MS = 90_000
+
 const apiClient = axios.create({
   baseURL: API_URL,
+  timeout: DEFAULT_TIMEOUT_MS,
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -67,7 +76,13 @@ apiClient.interceptors.response.use(
   }
 )
 
-/** Pull a human-readable message out of a FastAPI error response. */
+/**
+ * Pull a human-readable message out of a FastAPI error response.
+ *
+ * The distinctions here are the ones a user can act on: a timeout, an
+ * unreachable server and a server-side fault need different responses, and
+ * collapsing them into "Something went wrong" hides which one happened.
+ */
 export function apiErrorMessage(error: unknown, fallback = 'Something went wrong'): string {
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data?.detail
@@ -77,9 +92,25 @@ export function apiErrorMessage(error: unknown, fallback = 'Something went wrong
       const first = detail[0]
       if (typeof first?.msg === 'string') return first.msg
     }
+
     if (!error.response) {
-      return 'Cannot reach the server. Check that the backend is running.'
+      // No response at all: timeout, DNS failure, connection refused or CORS.
+      if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+        return 'The request timed out. The server may be busy or still starting up.'
+      }
+      return `Cannot reach the API at ${API_URL}. Check that the backend is running and reachable.`
     }
+
+    const status = error.response.status
+    if (status === 401) return 'Your session has expired. Please sign in again.'
+    if (status === 403) return 'You do not have permission to perform this action.'
+    if (status === 404) return 'That resource does not exist.'
+    if (status === 409) return 'That operation conflicts with work already in progress.'
+    if (status === 503) return 'That data source is temporarily unavailable.'
+    if (status === 504) {
+      return 'The server took too long to respond. Try again in a moment.'
+    }
+    if (status >= 500) return `The server returned an error (${status}).`
   }
   if (error instanceof Error && error.message) return error.message
   return fallback

@@ -1,265 +1,188 @@
 // packages/dashboard/src/app/geovision/page.tsx
 'use client'
 
+import { Database, LayoutGrid, Siren } from 'lucide-react'
 import { useState } from 'react'
-import {
-  AlertTriangle,
-  CloudRain,
-  Database,
-  Leaf,
-  RefreshCw,
-  Thermometer,
-} from 'lucide-react'
+
 import Navigation from '@/components/shared/Navigation'
 import ProtectedRoute from '@/components/shared/ProtectedRoute'
-import useGeovisionData from '@/hooks/useGeovisionData'
+import CommandHeader from '@/components/geovision/CommandHeader'
+import DataSourceCatalog from '@/components/geovision/DataSourceCatalog'
+import GisMapPanel from '@/components/geovision/GisMapPanel'
+import GlobalFilters from '@/components/geovision/GlobalFilters'
+import IngestionMonitor from '@/components/geovision/IngestionMonitor'
+import KpiGrid from '@/components/geovision/KpiGrid'
+import RegionDetailPanel from '@/components/geovision/RegionDetailPanel'
+import SatelliteWatch from '@/components/geovision/SatelliteWatch'
+import SituationCenter from '@/components/geovision/SituationCenter'
+import SystemStatusBar from '@/components/geovision/SystemStatusBar'
+import TrendPanel from '@/components/geovision/TrendPanel'
+import VegetationTable from '@/components/geovision/VegetationTable'
+import { EmptyState, ErrorState, errorMessage } from '@/components/geovision/primitives'
+import {
+  useHierarchy,
+  useIngestionStatus,
+  useOverview,
+  useRefreshAll,
+} from '@/hooks/useGeovision'
 
-const WINDOW_OPTIONS = [
-  { label: '30 days', value: 30 },
-  { label: '90 days', value: 90 },
-  { label: '1 year', value: 365 },
-]
-
-function average(values: number[]): number | null {
-  if (values.length === 0) return null
-  return values.reduce((sum, v) => sum + v, 0) / values.length
-}
-
-function StatCard({
-  label,
-  value,
-  detail,
-  icon: Icon,
-  color,
-  bg,
-}: {
-  label: string
-  value: string
-  detail: string
-  icon: typeof Leaf
-  color: string
-  bg: string
-}) {
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200/50 dark:border-gray-700 p-4 shadow-sm">
-      <div className={`${bg} p-2 rounded-lg w-fit`}>
-        <Icon className={`w-5 h-5 ${color}`} />
-      </div>
-      <div className="mt-3">
-        <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{value}</div>
-        <div className="text-xs text-gray-500 dark:text-gray-400">{label}</div>
-        <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">{detail}</div>
-      </div>
-    </div>
-  )
-}
-
+/**
+ * GeoVision AI — Satellite & Multi-Hazard Intelligence Command Center.
+ *
+ * Layout follows the operational hierarchy: identity and system state first,
+ * then the filters that scope everything below, then the headline indicators,
+ * then the map as the primary visual, then analysis, then the operational
+ * panels an operator checks when something looks wrong.
+ *
+ * Every number on this page comes from the backend, which derives it from
+ * observations the ingestion pipeline actually stored. There is no mock data,
+ * no placeholder series and no hardcoded satellite value anywhere in the tree —
+ * where data is unavailable, components render an explicit empty state.
+ */
 function GeoVisionContent() {
-  const [days, setDays] = useState(90)
-  const { data, loading, error, hasAnyData, refresh } = useGeovisionData(days)
+  const overview = useOverview()
+  const hierarchy = useHierarchy()
+  const ingestion = useIngestionStatus()
+  const refreshAll = useRefreshAll()
+  const [refreshing, setRefreshing] = useState(false)
+  // Two views over one filter state, rather than a second page: the existing
+  // monitoring dashboard is unchanged and the operational view sits beside it,
+  // so nothing that already worked is disturbed.
+  const [view, setView] = useState<'monitoring' | 'situation'>('monitoring')
 
-  const ndviValues = data.vegetation?.data.map((d) => d.value) ?? []
-  const meanNdvi = average(ndviValues)
-  const rainfallTotal = data.rainfall?.data.reduce(
-    (sum, r) => sum + r.total_rainfall_mm,
-    0
-  )
-  const meanTemp = average(data.temperature?.data.map((d) => d.value) ?? [])
-  const regionCount = new Set([
-    ...(data.vegetation?.data.map((d) => d.region_id) ?? []),
-    ...(data.rainfall?.data.map((d) => d.region_id) ?? []),
-  ]).size
+  async function handleRefresh() {
+    setRefreshing(true)
+    try {
+      await refreshAll()
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  // An empty database is a distinct state from a broken one, and gets its own
+  // message telling the operator exactly how to populate it.
+  const hasData =
+    overview.data !== undefined &&
+    overview.data.data_source !== 'no_data' &&
+    overview.data.coverage.observations > 0
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <Navigation />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-              GeoVision AI
-            </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Satellite observations from Google Earth Engine
-            </p>
-          </div>
+      <CommandHeader
+        freshness={overview.data?.freshness}
+        isRefreshing={refreshing || overview.isFetching}
+        onRefresh={handleRefresh}
+      />
 
-          <div className="flex items-center gap-2">
-            <select
-              value={days}
-              onChange={(e) => setDays(Number(e.target.value))}
-              className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {WINDOW_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+      <SystemStatusBar
+        overview={overview.data}
+        ingestion={ingestion.data}
+        isLoading={overview.isLoading || ingestion.isLoading}
+        isError={overview.isError}
+      />
+
+      <GlobalFilters hierarchy={hierarchy.data} isLoading={hierarchy.isLoading} />
+
+      <div className="max-w-[1600px] mx-auto px-4 pt-3">
+        <div
+          className="inline-flex rounded border border-slate-300 dark:border-slate-700 overflow-hidden"
+          role="tablist"
+          aria-label="GeoVision view"
+        >
+          {(
+            [
+              ['monitoring', 'Monitoring', LayoutGrid],
+              ['situation', 'Situation Center', Siren],
+            ] as const
+          ).map(([key, label, Icon]) => (
             <button
-              onClick={refresh}
-              disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={view === key}
+              onClick={() => setView(key)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-r last:border-r-0 border-slate-300 dark:border-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
+                view === key
+                  ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                  : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
+              }`}
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+              <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+              {label}
             </button>
-          </div>
+          ))}
         </div>
-
-        {error && (
-          <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-amber-700 dark:text-amber-300">{error}</p>
-          </div>
-        )}
-
-        {/* An empty database is reported plainly rather than shown as zeros,
-            which would read as "measured zero" instead of "not ingested". */}
-        {!loading && !hasAnyData && (
-          <div className="mb-6 p-6 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-center">
-            <Database className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
-            <h2 className="font-semibold text-gray-900 dark:text-gray-100">
-              No satellite observations stored yet
-            </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-lg mx-auto">
-              The Earth Engine acquisition pipeline has not run. From{' '}
-              <code className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs">
-                packages/backend
-              </code>
-              , run{' '}
-              <code className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs">
-                python -m app.ingestion.cli check-config
-              </code>{' '}
-              to get started.
-            </p>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <StatCard
-            label="Mean NDVI"
-            value={meanNdvi !== null ? meanNdvi.toFixed(3) : '—'}
-            detail={`${ndviValues.length} region(s), MOD13Q1`}
-            icon={Leaf}
-            color="text-emerald-500"
-            bg="bg-emerald-50 dark:bg-emerald-900/30"
-          />
-          <StatCard
-            label="Total rainfall"
-            value={rainfallTotal ? `${rainfallTotal.toFixed(0)} mm` : '—'}
-            detail={`Summed over ${days} days, CHIRPS`}
-            icon={CloudRain}
-            color="text-blue-500"
-            bg="bg-blue-50 dark:bg-blue-900/30"
-          />
-          <StatCard
-            label="Mean land surface temp"
-            value={meanTemp !== null ? `${meanTemp.toFixed(1)} °C` : '—'}
-            detail="MOD11A2 daytime LST"
-            icon={Thermometer}
-            color="text-amber-500"
-            bg="bg-amber-50 dark:bg-amber-900/30"
-          />
-          <StatCard
-            label="Regions monitored"
-            value={regionCount > 0 ? String(regionCount) : '—'}
-            detail="With stored observations"
-            icon={Database}
-            color="text-indigo-500"
-            bg="bg-indigo-50 dark:bg-indigo-900/30"
-          />
-        </div>
-
-        {data.coverage.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200/50 dark:border-gray-700 shadow-sm mb-6 overflow-hidden">
-            <div className="px-5 py-3 border-b border-gray-100 dark:border-gray-700">
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
-                Ingestion coverage
-              </h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-900/50 text-gray-500 dark:text-gray-400">
-                  <tr>
-                    <th className="text-left px-5 py-2 font-medium">Dataset</th>
-                    <th className="text-right px-5 py-2 font-medium">Observations</th>
-                    <th className="text-right px-5 py-2 font-medium">Regions</th>
-                    <th className="text-left px-5 py-2 font-medium">Earliest</th>
-                    <th className="text-left px-5 py-2 font-medium">Latest</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {data.coverage.map((row) => (
-                    <tr key={row.dataset}>
-                      <td className="px-5 py-2 font-medium text-gray-900 dark:text-gray-100">
-                        {row.dataset}
-                      </td>
-                      <td className="px-5 py-2 text-right text-gray-600 dark:text-gray-300">
-                        {row.observations.toLocaleString()}
-                      </td>
-                      <td className="px-5 py-2 text-right text-gray-600 dark:text-gray-300">
-                        {row.regions}
-                      </td>
-                      <td className="px-5 py-2 text-gray-500 dark:text-gray-400">
-                        {row.earliest ?? '—'}
-                      </td>
-                      <td className="px-5 py-2 text-gray-500 dark:text-gray-400">
-                        {row.latest ?? '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {(data.vegetation?.count ?? 0) > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200/50 dark:border-gray-700 shadow-sm overflow-hidden">
-            <div className="px-5 py-3 border-b border-gray-100 dark:border-gray-700">
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
-                Vegetation health by region
-              </h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-900/50 text-gray-500 dark:text-gray-400">
-                  <tr>
-                    <th className="text-left px-5 py-2 font-medium">Region</th>
-                    <th className="text-left px-5 py-2 font-medium">Province</th>
-                    <th className="text-right px-5 py-2 font-medium">NDVI</th>
-                    <th className="text-left px-5 py-2 font-medium">Status</th>
-                    <th className="text-left px-5 py-2 font-medium">Observed</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {data.vegetation?.data.map((row) => (
-                    <tr key={row.region_id}>
-                      <td className="px-5 py-2 font-medium text-gray-900 dark:text-gray-100">
-                        {row.tehsil ?? row.district ?? row.region_id}
-                      </td>
-                      <td className="px-5 py-2 text-gray-600 dark:text-gray-300">
-                        {row.province ?? '—'}
-                      </td>
-                      <td className="px-5 py-2 text-right tabular-nums text-gray-900 dark:text-gray-100">
-                        {row.value.toFixed(3)}
-                      </td>
-                      <td className="px-5 py-2 text-gray-600 dark:text-gray-300">
-                        {row.health_status}
-                      </td>
-                      <td className="px-5 py-2 text-gray-500 dark:text-gray-400">
-                        {row.observation_date}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
       </div>
+
+      <main className="max-w-[1600px] mx-auto px-4 py-4 space-y-4">
+        {view === 'situation' && <SituationCenter />}
+
+        {view === 'monitoring' && overview.isError && (
+          <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900 rounded-lg">
+            <ErrorState
+              title="Unable to load the command centre"
+              detail={errorMessage(overview.error)}
+              onRetry={() => overview.refetch()}
+            />
+          </div>
+        )}
+
+        {view === 'monitoring' && !overview.isLoading && !overview.isError && !hasData && (
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
+            <EmptyState
+              icon={Database}
+              title="No satellite observations stored yet"
+              detail={
+                <>
+                  The Earth Engine acquisition pipeline has not stored any data.
+                  From{' '}
+                  <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[11px]">
+                    packages/backend
+                  </code>
+                  , run{' '}
+                  <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[11px]">
+                    python -m app.ingestion.cli check-config
+                  </code>{' '}
+                  then{' '}
+                  <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[11px]">
+                    python -m app.ingestion.cli daily
+                  </code>
+                  .
+                </>
+              }
+            />
+          </div>
+        )}
+
+        {view === 'monitoring' && (
+          <KpiGrid overview={overview.data} isLoading={overview.isLoading} />
+        )}
+
+        {/* The map stays visible in BOTH views: an operator reading the
+            situation summary still needs to see where the regions are. */}
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4 items-start">
+          <GisMapPanel />
+          <RegionDetailPanel />
+        </div>
+
+        {view === 'monitoring' && (
+          <>
+            <TrendPanel />
+            <SatelliteWatch />
+            <IngestionMonitor />
+            <VegetationTable />
+            <DataSourceCatalog />
+          </>
+        )}
+
+        <footer className="pt-2 pb-6 text-[10px] text-slate-400 dark:text-slate-500">
+          GeoVision AI is a satellite monitoring and analysis system. Indicators
+          shown here are derived from Earth observation data and are not official
+          disaster warnings.
+        </footer>
+      </main>
     </div>
   )
 }

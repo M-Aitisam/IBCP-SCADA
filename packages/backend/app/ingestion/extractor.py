@@ -120,11 +120,15 @@ class Extractor:
         prepared = masked.select(band_names)
 
         for spec in config.derived:
+            # Every index is computed from the *masked* image, so cloud and
+            # shadow pixels never contribute to it.
             if spec.expression == "normalizedDifference":
-                # Computed server-side from the *masked* image so cloud pixels
-                # never contribute to the index.
                 nd = masked.normalizedDifference(list(spec.bands)).rename(spec.metric)
                 prepared = prepared.addBands(nd)
+            elif spec.expression == "evi":
+                prepared = prepared.addBands(self._evi_band(masked, spec))
+            elif spec.expression == "water_mask":
+                prepared = prepared.addBands(self._water_mask_band(masked, spec))
             else:
                 raise ValueError(
                     f"{config.name}: unsupported derived expression {spec.expression!r}"
@@ -132,6 +136,55 @@ class Extractor:
         # copyProperties returns an ee.Element, which has no .select(). Cast
         # back to Image so the caller can keep treating it as one.
         return ee.Image(prepared.copyProperties(image, image.propertyNames()))
+
+    def _evi_band(self, masked: Any, spec: DerivedSpec) -> Any:
+        """Enhanced Vegetation Index, computed server-side.
+
+            EVI = G * (NIR - RED) / (NIR + C1*RED - C2*BLUE + L)
+            G=2.5, C1=6, C2=7.5, L=1   (Huete et al. 2002)
+
+        The band order in the spec is (NIR, RED, BLUE). Inputs are scaled to
+        reflectance first — see DerivedSpec.band_scale for why that is not
+        optional here the way it is for NDVI.
+        """
+        nir_band, red_band, blue_band = spec.bands
+        scaled = masked.select(list(spec.bands)).multiply(spec.band_scale)
+        return (
+            scaled.expression(
+                "2.5 * ((NIR - RED) / (NIR + 6.0 * RED - 7.5 * BLUE + 1.0))",
+                {
+                    "NIR": scaled.select(nir_band),
+                    "RED": scaled.select(red_band),
+                    "BLUE": scaled.select(blue_band),
+                },
+            )
+            .rename(spec.metric)
+        )
+
+    def _water_mask_band(self, masked: Any, spec: DerivedSpec) -> Any:
+        """Binary open-water mask from SAR backscatter, computed server-side.
+
+        `lt(threshold)` yields 1 where backscatter is below the cut and 0
+        elsewhere. Reduced with MEAN over a region, that is the fraction of
+        the region classified as water — the whole per-pixel classification
+        collapses to one number inside Earth Engine, so no imagery crosses the
+        wire.
+
+        Casting to float matters: an ee.Image of booleans reduces to a mask
+        rather than a mean on some code paths, which would silently give 0/1
+        instead of a fraction.
+        """
+        if spec.threshold is None:
+            raise ValueError(
+                f"{spec.metric}: water_mask requires a threshold in the registry"
+            )
+        band = spec.bands[0]
+        return (
+            masked.select(band)
+            .lt(spec.threshold)
+            .rename(spec.metric)
+            .toFloat()
+        )
 
     def _reducer_for(self, group: Reducer) -> Any:
         """Primary reducer combined with the descriptive stats we always store."""

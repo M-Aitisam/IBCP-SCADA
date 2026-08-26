@@ -105,8 +105,41 @@ def test_sentinel2_has_cloud_filter_and_derived_ndvi():
     assert config.mask_strategy == "s2_scl"
     ndvi = config.derived_for_metric("ndvi")
     assert ndvi is not None and ndvi.bands == ("B8", "B4")
-    # Raw reflectance is kept alongside the derived index.
-    assert {b.metric for b in config.bands} == {"reflectance_red", "reflectance_nir"}
+    # A normalised difference is scale-invariant, so no pre-scaling is needed.
+    assert ndvi.band_scale == 1.0
+    # Raw reflectance is kept alongside the derived indices.
+    assert {b.metric for b in config.bands} == {
+        "reflectance_blue",
+        "reflectance_red",
+        "reflectance_nir",
+    }
+
+
+def test_sentinel2_evi_is_scaled_to_reflectance_before_evaluation():
+    """EVI is not scale-invariant: its L term is defined against [0,1]."""
+    evi = DATASETS["sentinel2"].derived_for_metric("evi")
+    assert evi is not None
+    assert evi.expression == "evi"
+    # Order is (NIR, RED, BLUE) — the extractor unpacks positionally.
+    assert evi.bands == ("B8", "B4", "B2")
+    assert evi.band_scale == 1e-4
+    # Every input band must actually be configured on the dataset.
+    configured = {b.band for b in DATASETS["sentinel2"].bands}
+    assert set(evi.bands) <= configured
+
+
+def test_mod11a2_carries_day_and_night_lst_separately():
+    """The diurnal difference is the signal; averaging them would destroy it."""
+    config = DATASETS["mod11a2"]
+    day = config.band_for_metric("lst_day_c")
+    night = config.band_for_metric("lst_night_c")
+    assert day is not None and night is not None
+    assert day.band == "LST_Day_1km" and night.band == "LST_Night_1km"
+    # Both MODIS LST bands use the same 0.02 K scale factor.
+    assert day.scale_factor == night.scale_factor == 0.02
+    # 15000 raw -> 300 K -> 26.85 C
+    assert night.to_physical(15000) == pytest.approx(26.85)
+    assert night.unit == "celsius"
 
 
 def test_cadences_match_products():

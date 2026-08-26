@@ -16,15 +16,18 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict, dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Iterable, Optional, Protocol, Sequence
 
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, select
+from sqlalchemy import update as sa_update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.databases.timestampdb.models import (
     IngestionCheckpoint,
+    IngestionLock,
     IngestionRun,
     SatelliteObservation,
     build_observation_key,
@@ -32,6 +35,11 @@ from app.databases.timestampdb.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+# How long a lock survives without renewal. Long enough that a slow GEE chunk
+# never loses its lease, short enough that a crashed run frees the dataset the
+# same night rather than blocking the next cron.
+DEFAULT_LOCK_LEASE_SECONDS = 3600
 
 # Rows per INSERT ... ON CONFLICT statement. Keeps parameter counts well under
 # the Postgres 65535-bind limit given ~30 columns per row.
@@ -125,6 +133,14 @@ class ObservationStore(Protocol):
     async def start_run(self, run_id: str, mode: str, dry_run: bool) -> None: ...
 
     async def finish_run(self, run_id: str, **fields: Any) -> None: ...
+
+    async def acquire_lock(
+        self, lock_key: str, run_id: str, mode: Optional[str] = None, **kwargs: Any
+    ) -> bool: ...
+
+    async def renew_lock(self, lock_key: str, run_id: str, **kwargs: Any) -> bool: ...
+
+    async def release_lock(self, lock_key: str, run_id: str) -> None: ...
 
 
 class TimestampRepository:
@@ -249,6 +265,110 @@ class TimestampRepository:
         await self.session.execute(stmt)
         await self.session.commit()
 
+    # ---------------- locks ----------------
+
+    async def acquire_lock(
+        self,
+        lock_key: str,
+        run_id: str,
+        mode: Optional[str] = None,
+        holder: Optional[str] = None,
+        lease_seconds: int = DEFAULT_LOCK_LEASE_SECONDS,
+    ) -> bool:
+        """Take the lease for `lock_key`, or return False if someone holds it.
+
+        The whole decision is one statement. A read-then-write in Python would
+        race: two runs starting together would both see no lock and both
+        proceed. `ON CONFLICT ... DO UPDATE ... WHERE expires_at <= now()` lets
+        Postgres arbitrate — the conflicting UPDATE is skipped when the lease is
+        still live, so RETURNING yields no row and the caller backs off.
+        """
+        now = utcnow()
+        expires = now + timedelta(seconds=lease_seconds)
+        values = {
+            "lock_key": lock_key,
+            "run_id": run_id,
+            "mode": mode,
+            "holder": holder,
+            "acquired_at": now,
+            "expires_at": expires,
+        }
+        stmt = pg_insert(IngestionLock).values(**values)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["lock_key"],
+            set_={k: v for k, v in values.items() if k != "lock_key"},
+            # Reclaim only an expired lease; never steal a live one.
+            where=IngestionLock.expires_at <= now,
+        ).returning(IngestionLock.lock_key)
+
+        acquired = (await self.session.execute(stmt)).scalar_one_or_none() is not None
+        await self.session.commit()
+        if not acquired:
+            logger.warning(
+                "lock %s is held by another run; skipping to avoid duplicate work",
+                lock_key,
+            )
+        return acquired
+
+    async def renew_lock(
+        self,
+        lock_key: str,
+        run_id: str,
+        lease_seconds: int = DEFAULT_LOCK_LEASE_SECONDS,
+    ) -> bool:
+        """Extend our own lease. False means we no longer hold it."""
+        stmt = (
+            sa_update(IngestionLock)
+            .where(IngestionLock.lock_key == lock_key, IngestionLock.run_id == run_id)
+            .values(expires_at=utcnow() + timedelta(seconds=lease_seconds))
+            .returning(IngestionLock.lock_key)
+        )
+        held = (await self.session.execute(stmt)).scalar_one_or_none() is not None
+        await self.session.commit()
+        return held
+
+    async def release_lock(self, lock_key: str, run_id: str) -> None:
+        """Release only if we still own it, so a reclaimer is never evicted."""
+        await self.session.execute(
+            sa_delete(IngestionLock).where(
+                IngestionLock.lock_key == lock_key, IngestionLock.run_id == run_id
+            )
+        )
+        await self.session.commit()
+
+    async def active_locks(self) -> list[IngestionLock]:
+        """Locks whose lease has not expired — i.e. work believed in flight."""
+        rows = await self.session.execute(
+            select(IngestionLock).where(IngestionLock.expires_at > utcnow())
+        )
+        return list(rows.scalars().all())
+
+    async def reap_abandoned_runs(self) -> int:
+        """Close out runs left `running` by a process that died.
+
+        A run is abandoned when it is still marked running, started long enough
+        ago to be past any plausible lease, and holds no live lock. Marking them
+        keeps the ingestion history honest instead of showing a phantom job
+        forever — which is exactly the state this database was found in.
+        """
+        cutoff = utcnow() - timedelta(seconds=DEFAULT_LOCK_LEASE_SECONDS)
+        live = select(IngestionLock.run_id).where(IngestionLock.expires_at > utcnow())
+        stmt = (
+            sa_update(IngestionRun)
+            .where(
+                IngestionRun.status == "running",
+                IngestionRun.started_at < cutoff,
+                IngestionRun.run_id.notin_(live),
+            )
+            .values(status="abandoned", finished_at=utcnow())
+            .returning(IngestionRun.run_id)
+        )
+        reaped = (await self.session.execute(stmt)).scalars().all()
+        await self.session.commit()
+        if reaped:
+            logger.info("marked %d abandoned ingestion run(s)", len(reaped))
+        return len(reaped)
+
     # ---------------- run log ----------------
 
     async def start_run(self, run_id: str, mode: str, dry_run: bool) -> None:
@@ -312,3 +432,17 @@ class DryRunRepository:
 
     async def finish_run(self, run_id: str, **fields: Any) -> None:
         logger.info("[dry-run] would close ingestion run %s", run_id)
+
+    # A dry run writes nothing, so it has nothing to protect and must not
+    # block a real run that is legitimately holding the lease.
+    async def acquire_lock(
+        self, lock_key: str, run_id: str, mode: Optional[str] = None, **kwargs: Any
+    ) -> bool:
+        logger.info("[dry-run] would acquire lock %s", lock_key)
+        return True
+
+    async def renew_lock(self, lock_key: str, run_id: str, **kwargs: Any) -> bool:
+        return True
+
+    async def release_lock(self, lock_key: str, run_id: str) -> None:
+        logger.info("[dry-run] would release lock %s", lock_key)

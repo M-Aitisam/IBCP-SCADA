@@ -34,10 +34,18 @@ class FakeStore:
     write of the same observation updates rather than duplicates.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, locked: Optional[set[str]] = None) -> None:
         self.rows: dict[tuple[datetime, str], ObservationRecord] = {}
         self.checkpoints: dict[str, dict[str, Any]] = {}
         self.runs: dict[str, dict[str, Any]] = {}
+        # Lock keys a *different* run is pretending to hold, so contention can
+        # be simulated without a database.
+        self.locked: set[str] = set(locked or ())
+        self.held: dict[str, str] = {}
+        self.lock_events: list[tuple[str, str]] = []
+        # Set to have renew_lock start failing, simulating a reclaimed lease.
+        self.lose_lock_after: Optional[int] = None
+        self._renewals = 0
 
     async def upsert_observations(
         self, records: Sequence[ObservationRecord]
@@ -70,6 +78,33 @@ class FakeStore:
 
     async def finish_run(self, run_id: str, **fields: Any) -> None:
         self.runs.setdefault(run_id, {}).update(fields)
+
+    # ---- locks: same contract as TimestampRepository, in memory ----
+
+    async def acquire_lock(
+        self, lock_key: str, run_id: str, mode: Optional[str] = None, **kwargs: Any
+    ) -> bool:
+        if lock_key in self.locked:
+            self.lock_events.append(("denied", lock_key))
+            return False
+        self.held[lock_key] = run_id
+        self.lock_events.append(("acquired", lock_key))
+        return True
+
+    async def renew_lock(self, lock_key: str, run_id: str, **kwargs: Any) -> bool:
+        self._renewals += 1
+        if (
+            self.lose_lock_after is not None
+            and self._renewals > self.lose_lock_after
+        ):
+            return False
+        return self.held.get(lock_key) == run_id
+
+    async def release_lock(self, lock_key: str, run_id: str) -> None:
+        # Mirrors the real "release only what we own" guard.
+        if self.held.get(lock_key) == run_id:
+            del self.held[lock_key]
+            self.lock_events.append(("released", lock_key))
 
 
 class FakeClient:
