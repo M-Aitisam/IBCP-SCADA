@@ -124,4 +124,7 @@ connections are bound to the event loop that created them, and a warm function
 invocation runs on a different loop.
 
 Daily satellite ingestion runs from GitHub Actions rather than Vercel, which
-has no persistent scheduler and too short an execution budget for a backfill.
+has no persistent scheduler and too short an execution budget for a backfill.has no persistent scheduler and too short an execution budget for a backfillhas no persistent scheduler and too short an execution budget for a backfillhas no persistent scheduler and too short an execution budget for a backfillhas no persistent scheduler and too short an execution budget for a backfill
+has no persistent scheduler and too short an execution budget for a backfill
+has no persistent scheduler and too short an execution budget for a backfill
+has no persistent scheduler and too short an execution budget for a backfill
