@@ -125,6 +125,3 @@ invocation runs on a different loop.
 
 Daily satellite ingestion runs from GitHub Actions rather than Vercel, which
 has no persistent scheduler and too short an execution budget for a backfill.
-
-
-## deployment Testing 
