@@ -91,9 +91,9 @@ function Legend({
                 style={{ backgroundColor: palette[i] ?? NO_DATA_COLOUR }}
                 aria-hidden="true"
               />
-              <span className="text-[11px] text-slate-600 dark:text-slate-300">
+              <span className="text-[11px] text-content-muted">
                 {band.label}
-                <span className="text-slate-400 dark:text-slate-500">
+                <span className="text-content-subtle">
                   {' '}
                   {band.min <= -1 ? '' : `≥ ${band.min}`}
                 </span>
@@ -107,7 +107,7 @@ function Legend({
 
   if (!continuous) {
     return (
-      <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+      <div className="flex items-center gap-2 text-[11px] text-content-subtle">
         Not enough variation across the selection to build a scale.
         <NoDataKey />
       </div>
@@ -117,7 +117,7 @@ function Legend({
   return (
     <div className="flex flex-wrap items-center gap-3">
       <div className="inline-flex items-center gap-1.5">
-        <span className="text-[11px] tabular-nums text-slate-600 dark:text-slate-300">
+        <span className="text-[11px] tabular-nums text-content-muted">
           {continuous.min.toFixed(def.decimals)}
         </span>
         <span className="inline-flex" aria-hidden="true">
@@ -125,11 +125,11 @@ function Legend({
             <span key={c} className={swatch} style={{ backgroundColor: c }} />
           ))}
         </span>
-        <span className="text-[11px] tabular-nums text-slate-600 dark:text-slate-300">
+        <span className="text-[11px] tabular-nums text-content-muted">
           {continuous.max.toFixed(def.decimals)} {def.unit}
         </span>
       </div>
-      <span className="text-[11px] text-slate-400 dark:text-slate-500">
+      <span className="text-[11px] text-content-subtle">
         scaled across displayed regions
       </span>
       <NoDataKey />
@@ -190,10 +190,10 @@ function ConditionLegend({
                 style={{ backgroundColor: CONDITION_COLOURS[level] }}
                 aria-hidden="true"
               />
-              <span className="text-[11px] text-slate-600 dark:text-slate-300">
+              <span className="text-[11px] text-content-muted">
                 {CONDITION_LABELS[level]}
                 {count > 0 && (
-                  <span className="text-slate-400 dark:text-slate-500"> ({count})</span>
+                  <span className="text-content-subtle"> ({count})</span>
                 )}
               </span>
             </span>
@@ -201,7 +201,7 @@ function ConditionLegend({
         })}
       </div>
 
-      <p className="text-[10px] text-slate-400 dark:text-slate-500 max-w-2xl">
+      <p className="text-[10px] text-content-subtle max-w-2xl">
         {isAnomalyBased ? (
           <>
             Coloured by departure from each region&rsquo;s own seasonal normal
@@ -239,7 +239,7 @@ function NoDataKey() {
         style={{ backgroundColor: NO_DATA_COLOUR }}
         aria-hidden="true"
       />
-      <span className="text-[11px] text-slate-600 dark:text-slate-300">
+      <span className="text-[11px] text-content-muted">
         No observation
       </span>
     </span>
@@ -293,7 +293,7 @@ export default function GisMapPanel() {
           {/* Severity vs measurement. Severity is the operational default;
               the raw ramp stays one click away for an analyst. */}
           <div
-            className="inline-flex rounded border border-slate-300 dark:border-slate-700 overflow-hidden"
+            className="inline-flex rounded border border-line-strong overflow-hidden"
             role="group"
             aria-label="Map colouring"
           >
@@ -308,10 +308,10 @@ export default function GisMapPanel() {
                 type="button"
                 onClick={() => setColourMode(mode)}
                 aria-pressed={colourMode === mode}
-                className={`px-2 py-1 text-xs font-medium border-r last:border-r-0 border-slate-300 dark:border-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
+                className={`px-2 py-1 text-xs font-medium border-r last:border-r-0 border-line-strong focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand ${
                   colourMode === mode
-                    ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                    : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
+                    ? 'bg-content text-content-inverse'
+                    : 'bg-surface text-content-muted hover:bg-surface-sunken'
                 }`}
               >
                 {label}
@@ -319,7 +319,7 @@ export default function GisMapPanel() {
             ))}
           </div>
 
-          <Layers className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
+          <Layers className="w-3.5 h-3.5 text-content-subtle" aria-hidden="true" />
           <label className="sr-only" htmlFor="gv-map-layer">
             Map layer
           </label>
@@ -327,7 +327,7 @@ export default function GisMapPanel() {
             id="gv-map-layer"
             value={mapLayer}
             onChange={(e) => setMapLayer(e.target.value as MapLayer)}
-            className="px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="px-2 py-1 text-xs rounded border border-line-strong bg-surface text-content focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             {/* Only one thematic layer renders at a time. Painting several
                 choropleths simultaneously would be unreadable and would make
@@ -341,7 +341,7 @@ export default function GisMapPanel() {
         </div>
       }
     >
-      <div className="h-[420px] lg:h-[520px] relative border-b border-slate-200 dark:border-slate-800">
+      <div className="h-[420px] lg:h-[520px] relative border-b border-line">
         {geometry.isLoading || regionsQuery.isLoading ? (
           <LoadingState label="Loading map" />
         ) : geometry.isError ? (
@@ -386,7 +386,7 @@ export default function GisMapPanel() {
               />
               {fellBack && (
                 // Never silently show a different thing than the toggle says.
-                <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1.5 max-w-2xl">
+                <p className="text-[10px] text-sev-watch mt-1.5 max-w-2xl">
                   Showing measured values: no region has a seasonal baseline for{' '}
                   {definition.label} yet, so condition cannot be assessed. Run
                   the historical backfill to enable severity colouring for this
@@ -397,7 +397,7 @@ export default function GisMapPanel() {
           )}
         </div>
         {geometry.data && (
-          <span className="text-[10px] text-slate-400 dark:text-slate-500 shrink-0">
+          <span className="text-[10px] text-content-subtle shrink-0">
             {geometry.data.attribution}
           </span>
         )}

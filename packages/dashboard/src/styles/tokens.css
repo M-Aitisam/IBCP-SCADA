@@ -1,0 +1,381 @@
+/* packages/dashboard/src/styles/tokens.css
+ *
+ * GeoVision AI / PIDAS design tokens.
+ *
+ * One source of truth for colour, elevation and motion. Components reference
+ * these through the Tailwind theme (see tailwind.config.js), never by writing
+ * raw hex values — so a palette change happens here and nowhere else.
+ *
+ * Dark-first. An operations room is a dark room: a wall of white panels at 3am
+ * is fatiguing and washes out the severity colours that the whole interface
+ * depends on. Light is a complete, deliberate theme rather than an inversion.
+ *
+ * Colours are HSL triplets without the hsl() wrapper so Tailwind can apply
+ * opacity modifiers — `bg-surface/60` only works if the value is composable.
+ */
+
+:root {
+  /* ---- Base surfaces (light theme) --------------------------------- */
+  --gv-canvas: 210 40% 98%;
+  --gv-surface: 0 0% 100%;
+  --gv-surface-raised: 210 40% 99%;
+  --gv-surface-sunken: 210 40% 96%;
+  --gv-overlay: 222 47% 11%;
+
+  /* ---- Borders and separators --------------------------------------- */
+  --gv-border: 214 32% 88%;
+  --gv-border-strong: 214 25% 78%;
+  --gv-border-subtle: 214 32% 93%;
+
+  /* ---- Text ---------------------------------------------------------- */
+  --gv-text: 222 47% 11%;
+  --gv-text-muted: 215 20% 42%;
+  --gv-text-subtle: 215 16% 57%;
+  --gv-text-inverse: 210 40% 98%;
+
+  /* ---- Brand -----------------------------------------------------------
+   * Deep authority blue with a cyan signal accent. Chosen against the
+   * generic SaaS purple/indigo: this reads as instrumentation and orbital
+   * telemetry rather than as a startup product.
+   */
+  --gv-primary: 202 90% 34%;
+  --gv-primary-hover: 202 90% 28%;
+  --gv-primary-fg: 0 0% 100%;
+  --gv-accent: 187 85% 43%;
+  --gv-accent-soft: 187 70% 92%;
+
+  /* ---- Domain hues -----------------------------------------------------
+   * The three intelligence domains the platform covers. Used for domain
+   * identity, never for severity — mixing the two would make a "water" panel
+   * look like an "all clear".
+   */
+  --gv-domain-disaster: 14 88% 48%;
+  --gv-domain-agriculture: 142 62% 36%;
+  --gv-domain-water: 199 84% 42%;
+
+  /* ---- Severity --------------------------------------------------------
+   * Ordered scale. `unknown` is deliberately grey and never green: grey means
+   * "no basis to judge", green means "assessed and clear". Conflating them
+   * would present an unassessed district as safe.
+   */
+  --gv-ok: 152 62% 34%;
+  --gv-ok-soft: 152 55% 94%;
+  --gv-watch: 38 92% 42%;
+  --gv-watch-soft: 38 92% 94%;
+  --gv-high: 24 90% 46%;
+  --gv-high-soft: 24 90% 94%;
+  --gv-critical: 351 74% 46%;
+  --gv-critical-soft: 351 74% 96%;
+  --gv-unknown: 215 16% 60%;
+  --gv-unknown-soft: 215 25% 95%;
+
+  /* ---- Elevation ------------------------------------------------------- */
+  --gv-shadow-sm: 0 1px 2px hsl(222 47% 11% / 0.06);
+  --gv-shadow: 0 2px 8px hsl(222 47% 11% / 0.08);
+  --gv-shadow-lg: 0 12px 32px hsl(222 47% 11% / 0.12);
+  --gv-ring: 202 90% 45%;
+
+  /* ---- Geometry --------------------------------------------------------
+   * Tight radii. Large pill-shaped cards read as consumer software; an
+   * instrument panel wants crisp edges.
+   */
+  --gv-radius: 6px;
+  --gv-radius-sm: 4px;
+  --gv-radius-lg: 10px;
+
+  /* ---- Motion ---------------------------------------------------------- */
+  --gv-duration-fast: 120ms;
+  --gv-duration: 200ms;
+  --gv-duration-slow: 420ms;
+  --gv-ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  color-scheme: light;
+}
+
+/* ---------------------------------------------------------------------------
+ * Dark — the operational default.
+ *
+ * Declared for BOTH the explicit [data-theme="dark"] and the system
+ * preference, guarded so an explicit light choice always wins over the OS.
+ * ------------------------------------------------------------------------- */
+
+:root[data-theme='dark'],
+.dark {
+  --gv-canvas: 222 47% 7%;
+  --gv-surface: 222 40% 11%;
+  --gv-surface-raised: 220 36% 14%;
+  --gv-surface-sunken: 224 48% 5%;
+  --gv-overlay: 222 47% 4%;
+
+  --gv-border: 218 26% 21%;
+  --gv-border-strong: 216 22% 31%;
+  --gv-border-subtle: 220 30% 16%;
+
+  --gv-text: 210 40% 96%;
+  --gv-text-muted: 215 20% 68%;
+  --gv-text-subtle: 215 16% 52%;
+  --gv-text-inverse: 222 47% 11%;
+
+  /* Lifted for contrast against a dark canvas — the light-theme primary
+   * would be close to unreadable here. */
+  --gv-primary: 199 89% 52%;
+  --gv-primary-hover: 199 89% 62%;
+  --gv-primary-fg: 222 47% 8%;
+  --gv-accent: 187 92% 55%;
+  --gv-accent-soft: 187 60% 18%;
+
+  --gv-domain-disaster: 14 90% 60%;
+  --gv-domain-agriculture: 142 60% 52%;
+  --gv-domain-water: 199 88% 58%;
+
+  --gv-ok: 152 58% 48%;
+  --gv-ok-soft: 152 45% 14%;
+  --gv-watch: 38 92% 58%;
+  --gv-watch-soft: 38 60% 14%;
+  --gv-high: 24 92% 60%;
+  --gv-high-soft: 24 60% 15%;
+  --gv-critical: 351 85% 62%;
+  --gv-critical-soft: 351 55% 16%;
+  --gv-unknown: 215 16% 58%;
+  --gv-unknown-soft: 218 24% 18%;
+
+  --gv-shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.4);
+  --gv-shadow: 0 2px 10px hsl(0 0% 0% / 0.45);
+  --gv-shadow-lg: 0 16px 40px hsl(0 0% 0% / 0.55);
+  --gv-ring: 199 89% 58%;
+
+  color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------------------
+ * Texture
+ *
+ * A faint coordinate grid, used sparingly behind hero and shell surfaces. It
+ * reads as a chart backdrop rather than decoration, and at these opacities it
+ * never competes with data.
+ * ------------------------------------------------------------------------- */
+
+.gv-grid {
+  background-image:
+    linear-gradient(to right, hsl(var(--gv-border) / 0.5) 1px, transparent 1px),
+    linear-gradient(to bottom, hsl(var(--gv-border) / 0.5) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.gv-grid-fine {
+  background-image:
+    linear-gradient(to right, hsl(var(--gv-border) / 0.35) 1px, transparent 1px),
+    linear-gradient(to bottom, hsl(var(--gv-border) / 0.35) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+/* Radial vignette that keeps hero text legible over moving video. */
+.gv-vignette {
+  background:
+    radial-gradient(
+      ellipse 90% 70% at 50% 40%,
+      transparent 0%,
+      hsl(var(--gv-overlay) / 0.55) 65%,
+      hsl(var(--gv-overlay) / 0.9) 100%
+    );
+}
+
+/* ---------------------------------------------------------------------------
+ * Numeric type
+ *
+ * Tabular figures everywhere a number can change. Without this, a value
+ * ticking 0.41 -> 0.38 shifts its neighbours sideways, which on a wall display
+ * reads as flicker.
+ * ------------------------------------------------------------------------- */
+
+.gv-numeric {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+  letter-spacing: -0.01em;
+}
+
+/* Slow sweep used behind the hero and the pipeline diagram. */
+@keyframes gv-scan {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.5;
+  }
+  88% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.gv-scanline::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  height: 30%;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    hsl(var(--gv-accent) / 0.07),
+    transparent
+  );
+  animation: gv-scan 9s var(--gv-ease) infinite;
+  pointer-events: none;
+}
+
+@keyframes gv-pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 hsl(var(--gv-ok) / 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 6px hsl(var(--gv-ok) / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--gv-ok) / 0);
+  }
+}
+
+.gv-pulse {
+  animation: gv-pulse-ring 2.4s var(--gv-ease) infinite;
+}
+
+@keyframes gv-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.gv-rise {
+  animation: gv-rise var(--gv-duration-slow) var(--gv-ease) both;
+}
+
+/* ---------------------------------------------------------------------------
+ * Reduced motion
+ *
+ * Everything decorative stops. The scanline, pulse and reveal are atmosphere;
+ * none of them carries information, so removing them costs nothing. The hero
+ * video is paused separately in HeroVideo.tsx, because a background video is
+ * exactly the kind of motion this setting exists to suppress.
+ * ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .gv-scanline::after,
+  .gv-pulse,
+  .gv-rise {
+    animation: none !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Focus ring, applied globally so keyboard navigation is never invisible. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid hsl(var(--gv-ring));
+  outline-offset: 2px;
+  border-radius: var(--gv-radius-sm);
+}
+
+/* ---------------------------------------------------------------------------
+ * Instrument framing
+ *
+ * Registration brackets, of the kind printed on optical targets and film
+ * gates. They give a panel the feel of a calibrated instrument without adding
+ * a border, and they cost four gradients and no extra elements.
+ * ------------------------------------------------------------------------- */
+
+.gv-bracket {
+  position: relative;
+}
+
+.gv-bracket::before,
+.gv-bracket::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: hsl(var(--gv-accent) / 0.5);
+  border-style: solid;
+  pointer-events: none;
+}
+
+.gv-bracket::before {
+  top: -1px;
+  left: -1px;
+  border-width: 1px 0 0 1px;
+}
+
+.gv-bracket::after {
+  bottom: -1px;
+  right: -1px;
+  border-width: 0 1px 1px 0;
+}
+
+/* Hairline that fades out at both ends, for section dividers that should not
+ * read as hard rules. */
+.gv-rule {
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    hsl(var(--gv-border-strong)) 15%,
+    hsl(var(--gv-border-strong)) 85%,
+    transparent
+  );
+}
+
+/* Section index; the small monospace "01 / 06" markers. */
+.gv-index {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: 0.24em;
+}
+
+/* Slow drift for the hero's atmospheric layers. */
+@keyframes gv-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(2%, -1.5%, 0) scale(1.06);
+  }
+}
+
+.gv-drift {
+  animation: gv-drift 28s ease-in-out infinite;
+}
+
+@keyframes gv-ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    /* -50%, because the track renders its content twice for a seamless wrap. */
+    transform: translateX(-50%);
+  }
+}
+
+.gv-ticker {
+  animation: gv-ticker 42s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gv-drift,
+  .gv-ticker {
+    animation: none !important;
+  }
+}

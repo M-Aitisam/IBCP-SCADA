@@ -1,13 +1,14 @@
 // packages/dashboard/src/app/layout.tsx
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
+import '../styles/tokens.css'
 import './globals.css'
 import '../styles/theme.css'
 import { AuthProvider } from '@/context/AuthContext'
 import { ThemeProvider } from '@/context/ThemeContext'
 import QueryProvider from '@/components/providers/QueryProvider'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
 export const metadata: Metadata = {
   title: 'IBCP-SCADA - Indus Basin Cyber-Physical System',
@@ -21,7 +22,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={`${inter.variable} ${inter.className}`}>
         <ThemeProvider>
           <QueryProvider>
             <AuthProvider>

@@ -1,29 +1,41 @@
 // packages/dashboard/src/app/soil/page.tsx
 'use client'
 
-import Navigation from '@/components/shared/Navigation'
+import Link from 'next/link'
+import { Sprout } from 'lucide-react'
+import AppShell from '@/components/shell/AppShell'
 import ProtectedRoute from '@/components/shared/ProtectedRoute'
-import { Sprout, AlertTriangle, Gauge, Droplets } from 'lucide-react'
+import { Panel, PanelHeader } from '@/components/ui/Card'
+import { EmptyState } from '@/components/ui/States'
 
 function SoilContent() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <h1 className="text-2xl font-bold text-gray-900">Soil Monitoring</h1>
-        <p className="text-sm text-gray-500 mb-6">Salinity Tracking & Land Degradation Monitoring</p>
-        
-        <div className="bg-white rounded-xl border border-gray-200/50 p-6 shadow-sm">
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center text-gray-500">
-              <Sprout className="w-16 h-16 mx-auto text-amber-300" />
-              <p className="text-sm">Soil Health Dashboard</p>
-              <p className="text-xs text-gray-400">(Coming soon)</p>
-            </div>
-          </div>
-        </div>
+    <AppShell title="Soil & Crop Monitoring">
+      <div className="mx-auto max-w-5xl space-y-4">
+        <Panel flush>
+          <PanelHeader
+            title="Salinity and land degradation"
+            subtitle="Ground-station soil measurements"
+          />
+          <EmptyState
+            icon={<Sprout className="h-8 w-8" aria-hidden="true" />}
+            title="No ground-station soil feed is configured"
+            description={
+              <>
+                Salinity and degradation tracking needs in-situ measurements that this
+                deployment does not yet receive. Rather than model them, the panel stays
+                empty. Satellite vegetation condition (NDVI and EVI, scored against each
+                district&rsquo;s baseline) is live in the{' '}
+                <Link href="/geovision" className="font-medium text-brand hover:underline">
+                  GIS command centre
+                </Link>
+                .
+              </>
+            }
+          />
+        </Panel>
       </div>
-    </div>
+    </AppShell>
   )
 }
 

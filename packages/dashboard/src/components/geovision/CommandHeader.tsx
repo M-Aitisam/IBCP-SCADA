@@ -39,21 +39,21 @@ export default function CommandHeader({
   const isCustom = Boolean(customStart && customEnd)
 
   return (
-    <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+    <header className="bg-surface border-b border-line">
       <div className="max-w-[1600px] mx-auto px-4 py-3">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3 min-w-0">
-            <div className="mt-0.5 p-2 rounded bg-slate-900 dark:bg-slate-100">
+            <div className="mt-0.5 p-2 rounded bg-content">
               <Satellite
-                className="w-5 h-5 text-white dark:text-slate-900"
+                className="w-5 h-5 text-content-inverse"
                 aria-hidden="true"
               />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+              <h1 className="text-lg font-semibold tracking-tight text-content">
                 GeoVision AI
               </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-content-subtle">
                 Satellite &amp; Multi-Hazard Intelligence
               </p>
             </div>
@@ -62,21 +62,21 @@ export default function CommandHeader({
           <div className="flex flex-wrap items-center gap-4">
             <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
               <div>
-                <dt className="text-slate-500 dark:text-slate-400">
+                <dt className="text-content-subtle">
                   Latest observation
                 </dt>
-                <dd className="font-medium text-slate-900 dark:text-slate-100 tabular-nums">
+                <dd className="font-medium text-content tabular-nums">
                   {formatDate(freshness?.latest_observation)}
                   {freshness?.age_days !== null && freshness?.age_days !== undefined && (
-                    <span className="ml-1.5 font-normal text-slate-500 dark:text-slate-400">
+                    <span className="ml-1.5 font-normal text-content-subtle">
                       ({relativeDays(freshness.age_days)})
                     </span>
                   )}
                 </dd>
               </div>
               <div>
-                <dt className="text-slate-500 dark:text-slate-400">Last ingestion</dt>
-                <dd className="font-medium text-slate-900 dark:text-slate-100 tabular-nums">
+                <dt className="text-content-subtle">Last ingestion</dt>
+                <dd className="font-medium text-content tabular-nums">
                   {freshness?.last_ingested_at
                     ? formatDateTime(freshness.last_ingested_at)
                     : NO_VALUE}
@@ -88,7 +88,7 @@ export default function CommandHeader({
               type="button"
               onClick={onRefresh}
               disabled={isRefreshing}
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded border border-line-strong text-content hover:bg-surface-sunken disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             >
               <RefreshCw
                 className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`}
@@ -104,7 +104,7 @@ export default function CommandHeader({
             observation from a 16-day composite. */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <div
-            className="inline-flex rounded border border-slate-300 dark:border-slate-700 overflow-hidden"
+            className="inline-flex rounded border border-line-strong overflow-hidden"
             role="group"
             aria-label="Time range"
           >
@@ -119,10 +119,10 @@ export default function CommandHeader({
                     setShowCustom(false)
                   }}
                   aria-pressed={active}
-                  className={`px-2.5 py-1 text-xs font-medium border-r last:border-r-0 border-slate-300 dark:border-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
+                  className={`px-2.5 py-1 text-xs font-medium border-r last:border-r-0 border-line-strong focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand ${
                     active
-                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                      : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
+                      ? 'bg-content text-content-inverse'
+                      : 'bg-surface text-content-muted hover:bg-surface-sunken'
                   }`}
                 >
                   {RANGE_LABELS[key]}
@@ -134,21 +134,21 @@ export default function CommandHeader({
               onClick={() => setShowCustom((v) => !v)}
               aria-pressed={isCustom}
               aria-expanded={showCustom}
-              className={`px-2.5 py-1 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
+              className={`px-2.5 py-1 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand ${
                 isCustom
-                  ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                  : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
+                  ? 'bg-content text-content-inverse'
+                  : 'bg-surface text-content-muted hover:bg-surface-sunken'
               }`}
             >
               CUSTOM
             </button>
           </div>
 
-          <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
+          <span className="text-xs text-content-subtle">{label}</span>
 
           {showCustom && (
             <div className="flex items-center gap-2">
-              <label className="text-xs text-slate-500 dark:text-slate-400">
+              <label className="text-xs text-content-subtle">
                 <span className="sr-only">Custom range start</span>
                 <input
                   type="date"
@@ -156,13 +156,13 @@ export default function CommandHeader({
                   onChange={(e) =>
                     setCustomWindow(e.target.value || null, customEnd)
                   }
-                  className="px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="px-2 py-1 text-xs rounded border border-line-strong bg-surface-raised text-content focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 />
               </label>
-              <span className="text-xs text-slate-400" aria-hidden="true">
+              <span className="text-xs text-content-subtle" aria-hidden="true">
                 →
               </span>
-              <label className="text-xs text-slate-500 dark:text-slate-400">
+              <label className="text-xs text-content-subtle">
                 <span className="sr-only">Custom range end</span>
                 <input
                   type="date"
@@ -170,7 +170,7 @@ export default function CommandHeader({
                   onChange={(e) =>
                     setCustomWindow(customStart, e.target.value || null)
                   }
-                  className="px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="px-2 py-1 text-xs rounded border border-line-strong bg-surface-raised text-content focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 />
               </label>
             </div>

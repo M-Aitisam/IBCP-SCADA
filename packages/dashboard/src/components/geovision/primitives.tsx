@@ -48,18 +48,18 @@ export function Panel({
 }) {
   return (
     <section
-      className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm ${className}`}
+      className={`bg-surface border border-line rounded-lg shadow-sm ${className}`}
     >
       {(title || actions) && (
-        <header className="flex items-start justify-between gap-3 px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+        <header className="flex items-start justify-between gap-3 px-4 py-3 border-b border-line">
           <div className="min-w-0">
             {title && (
-              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 tracking-tight">
+              <h2 className="text-sm font-semibold text-content tracking-tight">
                 {title}
               </h2>
             )}
             {subtitle && (
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              <p className="text-xs text-content-subtle mt-0.5">
                 {subtitle}
               </p>
             )}
@@ -84,7 +84,7 @@ export function ScrollX({ children }: { children: ReactNode }) {
 export function LoadingState({ label = 'Loading' }: { label?: string }) {
   return (
     <div
-      className="flex items-center justify-center gap-2 py-8 text-sm text-slate-500 dark:text-slate-400"
+      className="flex items-center justify-center gap-2 py-8 text-sm text-content-subtle"
       role="status"
       aria-live="polite"
     >
@@ -105,10 +105,10 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-      <Icon className="w-7 h-7 text-slate-300 dark:text-slate-600 mb-2" aria-hidden="true" />
-      <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{title}</p>
+      <Icon className="w-7 h-7 text-content-subtle mb-2" aria-hidden="true" />
+      <p className="text-sm font-medium text-content-muted">{title}</p>
       {detail && (
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md">{detail}</p>
+        <p className="text-xs text-content-subtle mt-1 max-w-md">{detail}</p>
       )}
     </div>
   )
@@ -126,15 +126,15 @@ export function ErrorState({
   return (
     <div className="flex flex-col items-center justify-center py-8 px-4 text-center" role="alert">
       <AlertCircle className="w-7 h-7 text-rose-500 mb-2" aria-hidden="true" />
-      <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{title}</p>
+      <p className="text-sm font-medium text-content-muted">{title}</p>
       {detail && (
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md">{detail}</p>
+        <p className="text-xs text-content-subtle mt-1 max-w-md">{detail}</p>
       )}
       {onRetry && (
         <button
           type="button"
           onClick={onRetry}
-          className="mt-3 px-3 py-1.5 text-xs font-medium rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="mt-3 px-3 py-1.5 text-xs font-medium rounded border border-line-strong text-content hover:bg-surface-sunken focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
         >
           Retry
         </button>
@@ -222,12 +222,12 @@ const DATASET_STATE_STYLE: Record<
   // days out of 16, and painting that as a fault makes the panel meaningless.
   'NO NEW DATA': {
     className:
-      'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+      'bg-surface-sunken text-content-muted border-line-strong',
     icon: Clock,
   },
   'NO DATA': {
     className:
-      'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
+      'bg-surface-sunken text-content-muted border-line-strong',
     icon: CircleSlash,
   },
   FAILED: {
@@ -323,7 +323,7 @@ const CONDITION_STYLE: Record<
   },
   unknown: {
     className:
-      'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
+      'bg-surface-sunken text-content-muted border-line-strong',
     icon: CircleSlash,
     label: 'No basis',
   },
@@ -380,7 +380,7 @@ export function TrendIndicator({
 }) {
   if (status === 'insufficient_data' || direction === null) {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">
+      <span className="inline-flex items-center gap-1 text-[11px] text-content-subtle">
         <Minus className="w-3 h-3" aria-hidden="true" />
         Insufficient data
       </span>
@@ -392,10 +392,10 @@ export function TrendIndicator({
 
   const tone =
     interpretation === 'improving'
-      ? 'text-emerald-600 dark:text-emerald-400'
+      ? 'text-sev-ok'
       : interpretation === 'declining'
         ? 'text-rose-600 dark:text-rose-400'
-        : 'text-slate-500 dark:text-slate-400'
+        : 'text-content-subtle'
 
   return (
     <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${tone}`}>

@@ -25,8 +25,8 @@ const METRIC_ROWS: Array<{ key: string; label: string; unit: string; decimals: n
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800">
-      <h3 className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+    <div className="px-4 py-3 border-b border-line">
+      <h3 className="text-[10px] uppercase tracking-wider text-content-subtle mb-2">
         {title}
       </h3>
       {children}
@@ -47,9 +47,9 @@ function Row({
 }) {
   return (
     <div className="flex items-start justify-between gap-3 py-1">
-      <span className="text-xs text-slate-600 dark:text-slate-300">{label}</span>
+      <span className="text-xs text-content-muted">{label}</span>
       <span className="text-right min-w-0">
-        <span className="block text-xs font-medium tabular-nums text-slate-900 dark:text-slate-100">
+        <span className="block text-xs font-medium tabular-nums text-content">
           {value}
         </span>
         {trend && (
@@ -61,7 +61,7 @@ function Row({
           />
         )}
         {meta && (
-          <span className="block text-[10px] text-slate-400 dark:text-slate-500">
+          <span className="block text-[10px] text-content-subtle">
             {meta}
           </span>
         )}
@@ -85,10 +85,10 @@ function Body({ detail }: { detail: RegionDetail }) {
     <>
       <Section title="Region">
         <div className="space-y-0.5">
-          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <div className="text-sm font-semibold text-content">
             {region.name}
           </div>
-          <dl className="text-[11px] text-slate-500 dark:text-slate-400 space-y-0.5">
+          <dl className="text-[11px] text-content-subtle space-y-0.5">
             <div className="flex gap-2">
               <dt className="w-16 shrink-0">Province</dt>
               <dd>{region.province ?? NO_VALUE}</dd>
@@ -144,7 +144,7 @@ function Body({ detail }: { detail: RegionDetail }) {
 
       <Section title="Data status">
         {detail.datasets.length === 0 ? (
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-content-subtle">
             No datasets have stored observations for this region.
           </p>
         ) : (
@@ -176,7 +176,7 @@ function Body({ detail }: { detail: RegionDetail }) {
             }
           />
         ))}
-        <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-2">
+        <p className="text-[10px] text-content-subtle mt-2">
           Cloud cover is a scene-level property. SAR and MODIS composites do not
           publish one, so “n/a” means not applicable rather than missing.
         </p>
@@ -198,7 +198,7 @@ export default function RegionDetailPanel() {
 
   if (!selectedRegionId) {
     return (
-      <aside className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
+      <aside className="bg-surface border border-line rounded-lg">
         <EmptyState
           title="No region selected"
           detail="Select a region on the map, or search for one, to see its full detail."
@@ -208,16 +208,16 @@ export default function RegionDetailPanel() {
   }
 
   return (
-    <aside className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden flex flex-col max-h-[820px]">
-      <header className="flex items-center justify-between gap-2 px-4 py-3 border-b border-slate-200 dark:border-slate-800">
-        <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+    <aside className="bg-surface border border-line rounded-lg overflow-hidden flex flex-col max-h-[820px]">
+      <header className="flex items-center justify-between gap-2 px-4 py-3 border-b border-line">
+        <h2 className="text-sm font-semibold text-content">
           Region detail
         </h2>
         <button
           type="button"
           onClick={() => selectRegion(null)}
           aria-label="Close region detail"
-          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="p-1 rounded text-content-subtle hover:text-content hover:bg-surface-sunken focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
         >
           <X className="w-4 h-4" aria-hidden="true" />
         </button>

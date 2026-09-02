@@ -67,7 +67,7 @@ const LEVEL_STYLE: Record<string, string> = {
   LOW: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-900',
   NORMAL: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-900',
   INSUFFICIENT_DATA:
-    'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
+    'bg-surface-sunken text-content-muted border-line-strong',
 }
 
 function LevelBadge({ level }: { level: HazardLevel | AlertSeverity | string }) {
@@ -95,31 +95,31 @@ function Counter({
   tone?: 'neutral' | 'warn' | 'bad' | 'good'
 }) {
   const toneClass = {
-    neutral: 'text-slate-900 dark:text-slate-100',
-    good: 'text-emerald-600 dark:text-emerald-400',
-    warn: 'text-amber-600 dark:text-amber-400',
+    neutral: 'text-content',
+    good: 'text-sev-ok',
+    warn: 'text-sev-watch',
     bad: 'text-rose-600 dark:text-rose-400',
   }[tone]
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3">
+    <div className="bg-surface border border-line rounded-lg p-3">
       <div className="flex items-center gap-1.5">
-        <Icon className="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden="true" />
-        <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate">
+        <Icon className="w-3.5 h-3.5 text-content-subtle shrink-0" aria-hidden="true" />
+        <span className="text-[10px] uppercase tracking-wider text-content-subtle truncate">
           {label}
         </span>
       </div>
       <div className={`mt-1.5 text-xl font-semibold tabular-nums ${toneClass}`}>{value}</div>
       {detail && (
-        <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{detail}</div>
+        <div className="text-[11px] text-content-subtle mt-0.5">{detail}</div>
       )}
     </div>
   )
 }
 
 const TH =
-  'text-left px-3 py-2 font-medium text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 whitespace-nowrap'
-const TD = 'px-3 py-2 text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap'
+  'text-left px-3 py-2 font-medium text-[10px] uppercase tracking-wider text-content-subtle whitespace-nowrap'
+const TD = 'px-3 py-2 text-xs text-content-muted whitespace-nowrap'
 
 export default function SituationCenter() {
   const [hazard, setHazard] = useState<HazardKey>('multi_hazard')
@@ -162,7 +162,7 @@ export default function SituationCenter() {
           onRetry={() => brief.refetch()}
         >
           <>
-            <p className="text-sm text-slate-800 dark:text-slate-200">{b?.headline}</p>
+            <p className="text-sm text-content">{b?.headline}</p>
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mt-3">
               <Counter
                 label="Active alerts"
@@ -245,15 +245,15 @@ export default function SituationCenter() {
             {(
               [
                 ['Deteriorated', changes.data?.deteriorating ?? [], 'text-rose-600 dark:text-rose-400'],
-                ['Improved', changes.data?.improving ?? [], 'text-emerald-600 dark:text-emerald-400'],
+                ['Improved', changes.data?.improving ?? [], 'text-sev-ok'],
               ] as const
             ).map(([title, items, tone]) => (
               <div key={title}>
-                <h3 className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                <h3 className="text-[10px] uppercase tracking-wider text-content-subtle mb-1.5">
                   {title} ({items.length})
                 </h3>
                 {items.length === 0 ? (
-                  <p className="text-xs text-slate-400">None</p>
+                  <p className="text-xs text-content-subtle">None</p>
                 ) : (
                   <ul className="space-y-1">
                     {items.map((item) => {
@@ -264,9 +264,9 @@ export default function SituationCenter() {
                           <button
                             type="button"
                             onClick={() => selectRegion(id)}
-                            className="w-full text-left flex items-center justify-between gap-2 px-2 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            className="w-full text-left flex items-center justify-between gap-2 px-2 py-1 rounded hover:bg-surface-sunken focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                           >
-                            <span className="text-xs text-slate-800 dark:text-slate-200 truncate">
+                            <span className="text-xs text-content truncate">
                               {String(record.district ?? record.name ?? id)}
                             </span>
                             <span className={`text-xs font-medium tabular-nums ${tone}`}>
@@ -306,7 +306,7 @@ export default function SituationCenter() {
               id="sc-hazard"
               value={hazard}
               onChange={(e) => setHazard(e.target.value as HazardKey)}
-              className="px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="px-2 py-1 text-xs rounded border border-line-strong bg-surface text-content focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             >
               {HAZARDS.map((h) => (
                 <option key={h.key} value={h.key}>
@@ -332,7 +332,7 @@ export default function SituationCenter() {
               // The honest explanation, not a blank table: scoring needs
               // multi-year baselines, and a database without history cannot
               // produce them.
-              <p className="px-4 py-3 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-900">
+              <p className="px-4 py-3 text-xs text-amber-700 dark:text-amber-400 bg-sev-watch-soft/40 border-b border-sev-watch/30">
                 No region could be scored this cycle. Hazard scoring compares each
                 region against its own seasonal baseline, which needs several
                 years of history. Run the historical backfill to enable it.
@@ -341,7 +341,7 @@ export default function SituationCenter() {
             <ScrollX>
               <table className="w-full border-collapse">
                 <caption className="sr-only">Regions ranked by hazard score</caption>
-                <thead className="bg-slate-50 dark:bg-slate-950/50">
+                <thead className="bg-canvas/50">
                   <tr>
                     <th scope="col" className={TH}>Region</th>
                     <th scope="col" className={TH}>Province</th>
@@ -352,14 +352,14 @@ export default function SituationCenter() {
                     <th scope="col" className={TH}>Held</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody className="divide-y divide-line-subtle">
                   {(hazards.data?.regions ?? []).map((r) => (
                     <tr
                       key={r.region_id}
                       onClick={() => selectRegion(r.region_id)}
-                      className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                      className="cursor-pointer hover:bg-surface-sunken/50"
                     >
-                      <td className={`${TD} font-medium text-slate-900 dark:text-slate-100`}>
+                      <td className={`${TD} font-medium text-content`}>
                         {r.district ?? r.name ?? r.region_id}
                       </td>
                       <td className={TD}>{r.province ?? NO_VALUE}</td>
@@ -375,7 +375,7 @@ export default function SituationCenter() {
                       <td className={`${TD} max-w-[14rem] truncate`}>
                         {r.primary_driver ?? NO_VALUE}
                       </td>
-                      <td className={`${TD} tabular-nums text-slate-500`}>
+                      <td className={`${TD} tabular-nums text-content-subtle`}>
                         {r.consecutive_periods > 1 ? `${r.consecutive_periods} cycles` : '—'}
                       </td>
                     </tr>
@@ -392,9 +392,9 @@ export default function SituationCenter() {
         title="Active indicators"
         subtitle="Satellite-derived early-warning indicators — not official warnings"
       >
-        <div className="flex items-start gap-2 mb-3 p-2 rounded bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-          <ShieldAlert className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" aria-hidden="true" />
-          <p className="text-[10px] leading-relaxed text-slate-600 dark:text-slate-300">
+        <div className="flex items-start gap-2 mb-3 p-2 rounded bg-surface-sunken/60 border border-line">
+          <ShieldAlert className="w-3.5 h-3.5 text-content-subtle mt-0.5 shrink-0" aria-hidden="true" />
+          <p className="text-[10px] leading-relaxed text-content-muted">
             {alerts.data?.disclaimer ??
               'Satellite-derived analytical indicators produced by this system. Not official disaster warnings and carrying no authority from NDMA, PDMA or any government body.'}
           </p>
@@ -413,16 +413,16 @@ export default function SituationCenter() {
             {(alerts.data?.alerts ?? []).map((a) => (
               <li
                 key={a.alert_id}
-                className="p-2.5 rounded border border-slate-200 dark:border-slate-700"
+                className="p-2.5 rounded border border-line"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <span className="text-xs font-medium text-slate-900 dark:text-slate-100">
+                  <span className="text-xs font-medium text-content">
                     {a.hazard.replace('_', ' ')} · {a.region_name ?? a.region_id}
                   </span>
                   <LevelBadge level={a.severity} />
                 </div>
-                <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-300">{a.reason}</p>
-                <p className="mt-1 text-[10px] text-slate-400">
+                <p className="mt-1 text-[11px] text-content-muted">{a.reason}</p>
+                <p className="mt-1 text-[10px] text-content-subtle">
                   {a.alert_id} · first detected {formatDate(a.first_detected)} ·
                   {' '}seen {a.occurrence_count}× · rule {a.rule_id ?? NO_VALUE}
                 </p>
@@ -448,16 +448,16 @@ export default function SituationCenter() {
               {(freshness.data?.datasets ?? []).map((d) => (
                 <li key={d.dataset_id} className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <span className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                    <span className="text-xs font-medium text-content">
                       {d.dataset_id}
                     </span>
-                    <span className="block text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                    <span className="block text-[10px] text-content-subtle truncate">
                       {d.detail}
                     </span>
                   </div>
                   <div className="text-right shrink-0">
                     <LevelBadge level={d.state === 'FRESH' ? 'NORMAL' : d.state} />
-                    <span className="block text-[10px] text-slate-400 mt-0.5 tabular-nums">
+                    <span className="block text-[10px] text-content-subtle mt-0.5 tabular-nums">
                       latest {formatDate(d.latest_observation)}
                     </span>
                   </div>
@@ -493,17 +493,17 @@ export default function SituationCenter() {
                             ? 'bg-amber-500'
                             : stage.status === 'failed'
                               ? 'bg-rose-500'
-                              : 'bg-slate-300'
+                              : 'bg-line-strong'
                       }`}
                       aria-hidden="true"
                     />
-                    <span className="text-xs text-slate-800 dark:text-slate-200 truncate">
+                    <span className="text-xs text-content truncate">
                       {stage.stage}
                     </span>
                     {/* Status as a word too, never colour alone. */}
-                    <span className="text-[10px] text-slate-400">{stage.status}</span>
+                    <span className="text-[10px] text-content-subtle">{stage.status}</span>
                   </span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums shrink-0">
+                  <span className="text-[10px] text-content-subtle tabular-nums shrink-0">
                     {stage.duration_ms ?? 0}ms · {stage.records_out} out
                   </span>
                 </li>

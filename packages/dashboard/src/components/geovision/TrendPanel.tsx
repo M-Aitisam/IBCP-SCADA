@@ -156,35 +156,35 @@ function TrendChart({
 
           {/* Explicit current-vs-previous comparison (§42). */}
           {data?.trend && (
-            <dl className="mt-3 grid grid-cols-3 gap-2 text-[11px] border-t border-slate-100 dark:border-slate-800 pt-2">
+            <dl className="mt-3 grid grid-cols-3 gap-2 text-[11px] border-t border-line-subtle pt-2">
               <div>
-                <dt className="text-slate-500 dark:text-slate-400">Current</dt>
-                <dd className="font-medium tabular-nums text-slate-900 dark:text-slate-100">
+                <dt className="text-content-subtle">Current</dt>
+                <dd className="font-medium tabular-nums text-content">
                   {data.trend.current
                     ? formatValue(data.trend.current.value, data.unit, decimals)
                     : NO_VALUE}
                 </dd>
               </div>
               <div>
-                <dt className="text-slate-500 dark:text-slate-400">Previous</dt>
-                <dd className="font-medium tabular-nums text-slate-900 dark:text-slate-100">
+                <dt className="text-content-subtle">Previous</dt>
+                <dd className="font-medium tabular-nums text-content">
                   {data.trend.previous
                     ? formatValue(data.trend.previous.value, data.unit, decimals)
                     : NO_VALUE}
                 </dd>
               </div>
               <div>
-                <dt className="text-slate-500 dark:text-slate-400">Change</dt>
+                <dt className="text-content-subtle">Change</dt>
                 <dd>
                   {data.trend.status === 'insufficient_data' ? (
                     <span
-                      className="text-slate-400 dark:text-slate-500"
+                      className="text-content-subtle"
                       title={data.trend.reason}
                     >
                       Insufficient data
                     </span>
                   ) : (
-                    <span className="font-medium tabular-nums text-slate-900 dark:text-slate-100">
+                    <span className="font-medium tabular-nums text-content">
                       {data.trend.change_pct === null
                         ? NO_VALUE
                         : `${data.trend.change_pct > 0 ? '+' : ''}${data.trend.change_pct}%`}

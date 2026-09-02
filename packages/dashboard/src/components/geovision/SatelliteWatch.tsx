@@ -40,30 +40,30 @@ function AnomalyRow({
   const data = query.data as AnomalyResponse | undefined
 
   return (
-    <div className="py-2 border-b border-slate-100 dark:border-slate-800 last:border-b-0">
+    <div className="py-2 border-b border-line-subtle last:border-b-0">
       <div className="flex items-start justify-between gap-3">
-        <span className="text-xs font-medium text-slate-700 dark:text-slate-200">
+        <span className="text-xs font-medium text-content">
           {label}
         </span>
 
         {query.isLoading ? (
-          <span className="text-[11px] text-slate-400">Loading…</span>
+          <span className="text-[11px] text-content-subtle">Loading…</span>
         ) : query.isError || !data ? (
-          <span className="text-[11px] text-slate-400">Unavailable</span>
+          <span className="text-[11px] text-content-subtle">Unavailable</span>
         ) : data.status === 'insufficient_data' ? (
           <span
-            className="text-[11px] text-slate-400 dark:text-slate-500 text-right max-w-[16rem]"
+            className="text-[11px] text-content-subtle text-right max-w-[16rem]"
             title={data.reason}
           >
             Insufficient baseline
           </span>
         ) : (
           <span className="text-right">
-            <span className="block text-xs font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+            <span className="block text-xs font-semibold tabular-nums text-content">
               {data.anomaly!.absolute > 0 ? '+' : ''}
               {formatValue(data.anomaly!.absolute, data.unit, decimals)}
             </span>
-            <span className="block text-[10px] text-slate-500 dark:text-slate-400">
+            <span className="block text-[10px] text-content-subtle">
               z = {data.anomaly!.z_score ?? NO_VALUE}
             </span>
           </span>
@@ -71,14 +71,14 @@ function AnomalyRow({
       </div>
 
       {data?.status === 'ok' && (
-        <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
+        <div className="mt-1 text-[10px] text-content-subtle">
           Observed {formatValue(data.observed?.value ?? null, data.unit, decimals)} vs
           baseline {formatValue(data.baseline!.value, data.unit, decimals)} over{' '}
           {data.baseline_years} prior year(s)
         </div>
       )}
       {data?.status === 'insufficient_data' && data.reason && (
-        <div className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
+        <div className="mt-1 text-[10px] text-content-subtle">
           {data.reason}
         </div>
       )}
@@ -99,12 +99,12 @@ export default function SatelliteWatch() {
         {/* The disclaimer is placed above the indicators, not buried below
             them: the brief is explicit that these must never read as official
             disaster warnings. */}
-        <div className="flex items-start gap-2 mb-3 p-2 rounded bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+        <div className="flex items-start gap-2 mb-3 p-2 rounded bg-surface-sunken/60 border border-line">
           <ShieldAlert
-            className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0"
+            className="w-3.5 h-3.5 text-content-subtle mt-0.5 shrink-0"
             aria-hidden="true"
           />
-          <p className="text-[10px] leading-relaxed text-slate-600 dark:text-slate-300">
+          <p className="text-[10px] leading-relaxed text-content-muted">
             {query.data?.disclaimer ??
               'These are satellite-derived analytical indicators produced by this system. They are not official disaster warnings and carry no authority from NDMA, PDMA or any government body.'}
           </p>
@@ -124,21 +124,21 @@ export default function SatelliteWatch() {
             {indicators.map((indicator, i) => (
               <li
                 key={`${indicator.kind}-${indicator.title}-${i}`}
-                className="p-2.5 rounded border border-slate-200 dark:border-slate-700"
+                className="p-2.5 rounded border border-line"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <span className="text-xs font-medium text-slate-900 dark:text-slate-100">
+                  <span className="text-xs font-medium text-content">
                     {indicator.title}
                   </span>
                   <PriorityBadge priority={indicator.priority} />
                 </div>
-                <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-300">
+                <p className="mt-1 text-[11px] text-content-muted">
                   {indicator.detail}
                 </p>
                 {indicator.rule && (
                   // The rule travels with the indicator so a reader can check
                   // the reasoning rather than trust a bare severity badge.
-                  <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
+                  <p className="mt-1 text-[10px] text-content-subtle">
                     Rule: {indicator.rule}
                   </p>
                 )}
@@ -152,7 +152,7 @@ export default function SatelliteWatch() {
         title="Anomaly analysis"
         subtitle="Departure from the same season in prior years"
       >
-        <div className="flex items-start gap-2 mb-2 text-[10px] text-slate-500 dark:text-slate-400">
+        <div className="flex items-start gap-2 mb-2 text-[10px] text-content-subtle">
           <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" aria-hidden="true" />
           <p>
             Anomalies are <strong>derived</strong> values, not measurements. The

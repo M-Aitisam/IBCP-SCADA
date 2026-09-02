@@ -12,8 +12,8 @@ import {
 } from './primitives'
 
 const TH =
-  'text-left px-3 py-2 font-medium text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 whitespace-nowrap'
-const TD = 'px-3 py-2 text-xs text-slate-700 dark:text-slate-300 align-top'
+  'text-left px-3 py-2 font-medium text-[10px] uppercase tracking-wider text-content-subtle whitespace-nowrap'
+const TD = 'px-3 py-2 text-xs text-content-muted align-top'
 
 /**
  * Data-source catalogue.
@@ -48,7 +48,7 @@ export default function DataSourceCatalog() {
               <caption className="sr-only">
                 Catalog of configured Earth Engine collections
               </caption>
-              <thead className="bg-slate-50 dark:bg-slate-950/50">
+              <thead className="bg-canvas/50">
                 <tr>
                   <th scope="col" className={TH}>Dataset</th>
                   <th scope="col" className={TH}>Provider / platform</th>
@@ -61,20 +61,20 @@ export default function DataSourceCatalog() {
                   <th scope="col" className={TH}>Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <tbody className="divide-y divide-line-subtle">
                 {datasets.map((d) => (
                   <tr key={d.dataset}>
-                    <td className={`${TD} font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap`}>
+                    <td className={`${TD} font-medium text-content whitespace-nowrap`}>
                       {d.dataset}
                       {d.version && (
-                        <span className="block text-[10px] text-slate-400">
+                        <span className="block text-[10px] text-content-subtle">
                           {d.version}
                         </span>
                       )}
                     </td>
                     <td className={TD}>
                       {d.provider ?? NO_VALUE}
-                      <span className="block text-[10px] text-slate-400">
+                      <span className="block text-[10px] text-content-subtle">
                         {d.platform ?? ''}
                       </span>
                     </td>
@@ -89,7 +89,7 @@ export default function DataSourceCatalog() {
                     </td>
                     <td className={`${TD} whitespace-nowrap`}>
                       {d.native_cadence}
-                      <span className="block text-[10px] text-slate-400 max-w-[12rem] whitespace-normal">
+                      <span className="block text-[10px] text-content-subtle max-w-[12rem] whitespace-normal">
                         {d.revisit ?? ''}
                       </span>
                     </td>
@@ -98,7 +98,7 @@ export default function DataSourceCatalog() {
                         {d.metrics.map((m) => (
                           <span
                             key={m.metric}
-                            className="inline-block px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px]"
+                            className="inline-block px-1.5 py-0.5 rounded bg-surface-sunken text-[10px]"
                             // Derived products are marked, so a computed index
                             // is never mistaken for a measured band.
                             title={m.derived ? 'Derived index' : 'Measured band'}
@@ -115,7 +115,7 @@ export default function DataSourceCatalog() {
                           {formatDate(d.coverage.earliest_observation)}
                           {' → '}
                           {formatDate(d.coverage.latest_observation)}
-                          <span className="block text-[10px] text-slate-400">
+                          <span className="block text-[10px] text-content-subtle">
                             {d.coverage.observations.toLocaleString()} obs ·{' '}
                             {d.coverage.regions} regions
                           </span>
@@ -133,14 +133,14 @@ export default function DataSourceCatalog() {
             </table>
           </ScrollX>
 
-          <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-800 space-y-1">
-            <p className="text-[10px] text-slate-500 dark:text-slate-400">
+          <div className="px-4 py-3 border-t border-line space-y-1">
+            <p className="text-[10px] text-content-subtle">
               * derived index, computed from source bands during acquisition.
             </p>
             {boundary && (
               // Boundary provenance stated plainly: the vintage affects which
               // province names and regions appear on the map.
-              <p className="text-[10px] text-slate-500 dark:text-slate-400">
+              <p className="text-[10px] text-content-subtle">
                 Boundaries: <span className="font-mono">{boundary.asset}</span> (
                 {boundary.region_type} level). {boundary.vintage_note}
               </p>

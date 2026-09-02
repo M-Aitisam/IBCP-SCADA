@@ -18,10 +18,10 @@ import { relativeDays } from './primitives'
 type Tone = 'ok' | 'warn' | 'bad' | 'idle'
 
 const TONE_CLASS: Record<Tone, string> = {
-  ok: 'text-emerald-600 dark:text-emerald-400',
-  warn: 'text-amber-600 dark:text-amber-400',
+  ok: 'text-sev-ok',
+  warn: 'text-sev-watch',
   bad: 'text-rose-600 dark:text-rose-400',
-  idle: 'text-slate-500 dark:text-slate-400',
+  idle: 'text-content-subtle',
 }
 
 const TONE_ICON: Record<Tone, typeof CheckCircle2> = {
@@ -47,9 +47,9 @@ function Item({
   const StatusIcon = TONE_ICON[tone]
   return (
     <div className="flex items-center gap-2 px-3 py-2">
-      <Icon className="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0" aria-hidden="true" />
+      <Icon className="w-4 h-4 text-content-subtle shrink-0" aria-hidden="true" />
       <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        <div className="text-[10px] uppercase tracking-wider text-content-subtle">
           {label}
         </div>
         <div className={`flex items-center gap-1 text-xs font-semibold ${TONE_CLASS[tone]}`}>
@@ -58,7 +58,7 @@ function Item({
           <span className="truncate">{value}</span>
         </div>
         {detail && (
-          <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+          <div className="text-[10px] text-content-subtle truncate">
             {detail}
           </div>
         )}
@@ -88,8 +88,8 @@ export default function SystemStatusBar({
 }) {
   if (isLoading) {
     return (
-      <div className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-[1600px] mx-auto px-4 py-2 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+      <div className="bg-canvas border-b border-line">
+        <div className="max-w-[1600px] mx-auto px-4 py-2 flex items-center gap-2 text-xs text-content-subtle">
           <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
           Checking system status…
         </div>
@@ -140,8 +140,8 @@ export default function SystemStatusBar({
     age === null ? 'idle' : age <= 10 ? 'ok' : age <= 30 ? 'warn' : 'bad'
 
   return (
-    <div className="bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800">
-      <div className="max-w-[1600px] mx-auto px-1 grid grid-cols-2 md:grid-cols-4 divide-x divide-slate-200 dark:divide-slate-800">
+    <div className="bg-canvas border-b border-line">
+      <div className="max-w-[1600px] mx-auto px-1 grid grid-cols-2 md:grid-cols-4 divide-x divide-line">
         <Item
           icon={Satellite}
           label="Earth Engine"

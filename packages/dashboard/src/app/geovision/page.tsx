@@ -4,7 +4,7 @@
 import { Database, LayoutGrid, Siren } from 'lucide-react'
 import { useState } from 'react'
 
-import Navigation from '@/components/shared/Navigation'
+import AppShell from '@/components/shell/AppShell'
 import ProtectedRoute from '@/components/shared/ProtectedRoute'
 import CommandHeader from '@/components/geovision/CommandHeader'
 import DataSourceCatalog from '@/components/geovision/DataSourceCatalog'
@@ -67,9 +67,7 @@ function GeoVisionContent() {
     overview.data.coverage.observations > 0
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      <Navigation />
-
+    <AppShell title="GIS Command Centre" flush>
       <CommandHeader
         freshness={overview.data?.freshness}
         isRefreshing={refreshing || overview.isFetching}
@@ -116,7 +114,7 @@ function GeoVisionContent() {
         </div>
       </div>
 
-      <main className="max-w-[1600px] mx-auto px-4 py-4 space-y-4">
+      <div className="max-w-[1600px] mx-auto px-4 py-4 space-y-4">
         {view === 'situation' && <SituationCenter />}
 
         {view === 'monitoring' && overview.isError && (
@@ -182,8 +180,8 @@ function GeoVisionContent() {
           shown here are derived from Earth observation data and are not official
           disaster warnings.
         </footer>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   )
 }
 

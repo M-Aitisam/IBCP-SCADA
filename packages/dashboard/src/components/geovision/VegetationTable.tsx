@@ -20,8 +20,8 @@ import {
 type SortKey = 'name' | 'ndvi' | 'evi' | 'rainfall' | 'lst' | 'observed'
 
 const TH =
-  'text-left px-3 py-2 font-medium text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 whitespace-nowrap'
-const TD = 'px-3 py-2 text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap'
+  'text-left px-3 py-2 font-medium text-[10px] uppercase tracking-wider text-content-subtle whitespace-nowrap'
+const TD = 'px-3 py-2 text-xs text-content-muted whitespace-nowrap'
 
 function sortValue(region: RegionSummary, key: SortKey): string | number | null {
   switch (key) {
@@ -67,13 +67,13 @@ function SortButton({
       <button
         type="button"
         onClick={() => onSort(sortKey)}
-        className={`inline-flex items-center gap-1 hover:text-slate-800 dark:hover:text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded ${
+        className={`inline-flex items-center gap-1 hover:text-content focus:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded ${
           align === 'right' ? 'flex-row-reverse' : ''
         }`}
       >
         {label}
         <ArrowUpDown
-          className={`w-3 h-3 ${active ? 'text-slate-700 dark:text-slate-200' : 'text-slate-300 dark:text-slate-600'}`}
+          className={`w-3 h-3 ${active ? 'text-content' : 'text-content-subtle'}`}
           aria-hidden="true"
         />
       </button>
@@ -145,7 +145,7 @@ export default function VegetationTable() {
             <caption className="sr-only">
               Latest vegetation and climate values for each region
             </caption>
-            <thead className="bg-slate-50 dark:bg-slate-950/50">
+            <thead className="bg-canvas/50">
               <tr>
                 <SortButton label="Region" sortKey="name" active={sortKey === 'name'} direction={direction} onSort={onSort} />
                 <th scope="col" className={TH}>Province</th>
@@ -159,7 +159,7 @@ export default function VegetationTable() {
                 <SortButton label="Observed" sortKey="observed" active={sortKey === 'observed'} direction={direction} onSort={onSort} />
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            <tbody className="divide-y divide-line-subtle">
               {rows.map((r) => {
                 const selected = r.region_id === selectedRegionId
                 return (
@@ -169,10 +169,10 @@ export default function VegetationTable() {
                     className={`cursor-pointer ${
                       selected
                         ? 'bg-blue-50 dark:bg-blue-950/40'
-                        : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                        : 'hover:bg-surface-sunken/50'
                     }`}
                   >
-                    <td className={`${TD} font-medium text-slate-900 dark:text-slate-100`}>
+                    <td className={`${TD} font-medium text-content`}>
                       <button
                         type="button"
                         // A real button so the row is keyboard reachable, not
@@ -181,7 +181,7 @@ export default function VegetationTable() {
                           e.stopPropagation()
                           selectRegion(selected ? null : r.region_id)
                         }}
-                        className="text-left hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+                        className="text-left hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded"
                       >
                         {r.name}
                       </button>
@@ -207,7 +207,7 @@ export default function VegetationTable() {
                     </td>
                     <td className={TD}>{r.vegetation_status ?? NO_VALUE}</td>
                     <td className={TD}>{r.crop_condition ?? NO_VALUE}</td>
-                    <td className={`${TD} text-slate-500 dark:text-slate-400 tabular-nums`}>
+                    <td className={`${TD} text-content-subtle tabular-nums`}>
                       {formatDate(r.latest_observation)}
                     </td>
                   </tr>

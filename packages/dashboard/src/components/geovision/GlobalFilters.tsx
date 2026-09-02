@@ -84,14 +84,14 @@ export default function GlobalFilters({
   }
 
   const selectClass =
-    'px-2.5 py-1.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 min-w-[9rem]'
+    'px-2.5 py-1.5 text-xs rounded border border-line-strong bg-surface text-content disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand min-w-[9rem]'
 
   return (
-    <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+    <div className="bg-surface border-b border-line">
       <div className="max-w-[1600px] mx-auto px-4 py-2.5 flex flex-wrap items-center gap-2">
         <div className="relative">
           <Search
-            className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400"
+            className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-subtle"
             aria-hidden="true"
           />
           <input
@@ -108,11 +108,11 @@ export default function GlobalFilters({
             }}
             placeholder="Search region…"
             aria-label="Search for a region"
-            className="pl-7 pr-2 py-1.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 w-52"
+            className="pl-7 pr-2 py-1.5 text-xs rounded border border-line-strong bg-surface text-content focus:outline-none focus-visible:ring-2 focus-visible:ring-brand w-52"
           />
           {open && matches.length > 0 && (
             <ul
-              className="absolute z-[1200] mt-1 w-72 max-h-64 overflow-y-auto rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg"
+              className="absolute z-[1200] mt-1 w-72 max-h-64 overflow-y-auto rounded border border-line bg-surface shadow-lg"
               role="listbox"
             >
               {matches.map((r) => (
@@ -124,12 +124,12 @@ export default function GlobalFilters({
                       if (blurTimer.current) clearTimeout(blurTimer.current)
                       pick(r.region_id, r.province, r.district)
                     }}
-                    className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus-visible:bg-slate-50 dark:focus-visible:bg-slate-800"
+                    className="w-full text-left px-3 py-2 text-xs hover:bg-surface-sunken focus:outline-none focus-visible:bg-surface-sunken"
                   >
-                    <span className="font-medium text-slate-900 dark:text-slate-100">
+                    <span className="font-medium text-content">
                       {r.name}
                     </span>
-                    <span className="block text-[11px] text-slate-500 dark:text-slate-400">
+                    <span className="block text-[11px] text-content-subtle">
                       {[r.district, r.province].filter(Boolean).join(' · ')}
                       {r.observations > 0 && ` · ${r.observations.toLocaleString()} obs`}
                     </span>
@@ -208,7 +208,7 @@ export default function GlobalFilters({
           <button
             type="button"
             onClick={reset}
-            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs rounded border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs rounded border border-line-strong text-content-muted hover:bg-surface-sunken focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             <X className="w-3 h-3" aria-hidden="true" />
             Clear

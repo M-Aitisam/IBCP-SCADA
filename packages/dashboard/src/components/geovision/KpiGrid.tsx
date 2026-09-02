@@ -41,14 +41,14 @@ function KpiCard({
   const unavailable = !kpi || kpi.status === 'no_data' || kpi.value === null
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3">
+    <div className="bg-surface border border-line rounded-lg p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <Icon
-            className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0"
+            className="w-3.5 h-3.5 text-content-subtle shrink-0"
             aria-hidden="true"
           />
-          <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate">
+          <span className="text-[10px] uppercase tracking-wider text-content-subtle truncate">
             {kpi?.label ?? '—'}
           </span>
         </div>
@@ -65,22 +65,22 @@ function KpiCard({
       <div className="mt-2">
         {unavailable ? (
           <>
-            <div className="text-xl font-semibold text-slate-300 dark:text-slate-600 tabular-nums">
+            <div className="text-xl font-semibold text-content-subtle tabular-nums">
               {NO_VALUE}
             </div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+            <div className="text-[11px] text-content-subtle mt-0.5">
               No observation available
             </div>
           </>
         ) : (
           <>
-            <div className="text-xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
+            <div className="text-xl font-semibold text-content tabular-nums">
               {formatValue(kpi.value, kpi.unit, decimals)}
             </div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+            <div className="text-[11px] text-content-subtle mt-0.5">
               Observed {formatDate(kpi.observation_date)}
             </div>
-            <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 truncate">
+            <div className="text-[10px] text-content-subtle mt-0.5 truncate">
               {kpi.dataset}
               {kpi.aggregation === 'sum' && ' · total over period'}
               {kpi.regions > 0 && ` · ${kpi.regions} region(s)`}
@@ -105,22 +105,22 @@ function InfoCard({
   icon: typeof MapPin
 }) {
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3">
+    <div className="bg-surface border border-line rounded-lg p-3">
       <div className="flex items-center gap-1.5">
         <Icon
-          className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0"
+          className="w-3.5 h-3.5 text-content-subtle shrink-0"
           aria-hidden="true"
         />
-        <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate">
+        <span className="text-[10px] uppercase tracking-wider text-content-subtle truncate">
           {label}
         </span>
       </div>
       <div className="mt-2">
-        <div className="text-xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
+        <div className="text-xl font-semibold text-content tabular-nums">
           {value}
         </div>
         {detail && (
-          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+          <div className="text-[11px] text-content-subtle mt-0.5">
             {detail}
           </div>
         )}

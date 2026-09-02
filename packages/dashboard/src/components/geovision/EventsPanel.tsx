@@ -41,8 +41,8 @@ function StatusBadge({ status }: { status: EventStatus | string }) {
 }
 
 const TH =
-  'text-left px-3 py-2 font-medium text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 whitespace-nowrap'
-const TD = 'px-3 py-2 text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap'
+  'text-left px-3 py-2 font-medium text-[10px] uppercase tracking-wider text-content-subtle whitespace-nowrap'
+const TD = 'px-3 py-2 text-xs text-content-muted whitespace-nowrap'
 
 export default function EventsPanel() {
   const [scope, setScope] = useState<'open' | 'all'>('open')
@@ -62,7 +62,7 @@ export default function EventsPanel() {
         bodyClassName=""
         actions={
           <div
-            className="inline-flex rounded border border-slate-300 dark:border-slate-700 overflow-hidden"
+            className="inline-flex rounded border border-line-strong overflow-hidden"
             role="group"
             aria-label="Event scope"
           >
@@ -72,10 +72,10 @@ export default function EventsPanel() {
                 type="button"
                 onClick={() => setScope(key)}
                 aria-pressed={scope === key}
-                className={`px-2.5 py-1 text-xs font-medium border-r last:border-r-0 border-slate-300 dark:border-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
+                className={`px-2.5 py-1 text-xs font-medium border-r last:border-r-0 border-line-strong focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand ${
                   scope === key
-                    ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                    : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
+                    ? 'bg-content text-content-inverse'
+                    : 'bg-surface text-content-muted hover:bg-surface-sunken'
                 }`}
               >
                 {key === 'open' ? 'Open' : 'All'}
@@ -100,7 +100,7 @@ export default function EventsPanel() {
           <ScrollX>
             <table className="w-full border-collapse">
               <caption className="sr-only">Hazard events</caption>
-              <thead className="bg-slate-50 dark:bg-slate-950/50">
+              <thead className="bg-canvas/50">
                 <tr>
                   <th scope="col" className={TH}>Event</th>
                   <th scope="col" className={TH}>Hazard</th>
@@ -113,7 +113,7 @@ export default function EventsPanel() {
                   <th scope="col" className={TH}>Verification</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <tbody className="divide-y divide-line-subtle">
                 {(events.data?.events ?? []).map((e) => (
                   <tr
                     key={e.event_id}
@@ -124,10 +124,10 @@ export default function EventsPanel() {
                     className={`cursor-pointer ${
                       selected === e.event_id
                         ? 'bg-blue-50 dark:bg-blue-950/40'
-                        : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                        : 'hover:bg-surface-sunken/50'
                     }`}
                   >
-                    <td className={`${TD} font-mono text-[11px] text-slate-900 dark:text-slate-100`}>
+                    <td className={`${TD} font-mono text-[11px] text-content`}>
                       {e.event_id}
                     </td>
                     <td className={TD}>{e.hazard_type.replace('_', ' ')}</td>
@@ -140,10 +140,10 @@ export default function EventsPanel() {
                       {e.peak_score === null ? NO_VALUE : e.peak_score.toFixed(0)}
                     </td>
                     <td className={`${TD} text-right tabular-nums`}>{e.duration_days}</td>
-                    <td className={`${TD} tabular-nums text-slate-500`}>
+                    <td className={`${TD} tabular-nums text-content-subtle`}>
                       {formatDate(e.first_detected_at)}
                     </td>
-                    <td className={`${TD} text-slate-500`}>{e.verification_status}</td>
+                    <td className={`${TD} text-content-subtle`}>{e.verification_status}</td>
                   </tr>
                 ))}
               </tbody>
@@ -172,15 +172,15 @@ export default function EventsPanel() {
                 const f = frame as Record<string, unknown>
                 return (
                   <li key={i} className="flex items-center gap-3">
-                    <span className="text-[11px] tabular-nums text-slate-500 w-24 shrink-0">
+                    <span className="text-[11px] tabular-nums text-content-subtle w-24 shrink-0">
                       {formatDate(String(f.reference_date))}
                     </span>
                     <StatusBadge status={String(f.status)} />
-                    <span className="text-xs tabular-nums text-slate-700 dark:text-slate-300 w-14 text-right">
+                    <span className="text-xs tabular-nums text-content-muted w-14 text-right">
                       {f.score === null ? NO_VALUE : Number(f.score).toFixed(0)}
                     </span>
                     {f.transition ? (
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      <span className="text-[11px] text-content-subtle">
                         {String(f.transition)}
                       </span>
                     ) : null}
@@ -214,10 +214,10 @@ export default function EventsPanel() {
               {(hotspots.data?.hotspots ?? []).map((h) => (
                 <li
                   key={h.cluster_id}
-                  className="p-2.5 rounded border border-slate-200 dark:border-slate-700"
+                  className="p-2.5 rounded border border-line"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <span className="text-xs font-medium text-slate-900 dark:text-slate-100">
+                    <span className="text-xs font-medium text-content">
                       <Layers className="inline w-3 h-3 mr-1" aria-hidden="true" />
                       {h.hazard_type.replace('_', ' ')} · {h.cluster_size} districts
                     </span>
@@ -227,10 +227,10 @@ export default function EventsPanel() {
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-300">
+                  <p className="mt-1 text-[11px] text-content-muted">
                     {h.regions.map((r) => r.district ?? r.region_id).join(', ')}
                   </p>
-                  <p className="mt-0.5 text-[10px] text-slate-400">
+                  <p className="mt-0.5 text-[10px] text-content-subtle">
                     avg severity {h.average_severity?.toFixed(0) ?? NO_VALUE} · max{' '}
                     {h.maximum_severity?.toFixed(0) ?? NO_VALUE} ·{' '}
                     {h.provinces.join(', ')}
@@ -259,7 +259,7 @@ export default function EventsPanel() {
             onRetry={() => replay.refetch()}
           >
             <>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2">
+              <p className="text-[11px] text-content-subtle mb-2">
                 <Rewind className="inline w-3 h-3 mr-1" aria-hidden="true" />
                 {replay.data?.frame_count} frame(s) between{' '}
                 {formatDate(replay.data?.period.start)} and{' '}
@@ -268,13 +268,13 @@ export default function EventsPanel() {
               <ol className="space-y-1">
                 {(replay.data?.frames ?? []).slice(-12).map((frame) => (
                   <li key={frame.reference_date} className="flex items-start gap-2">
-                    <span className="text-[11px] tabular-nums text-slate-500 w-24 shrink-0">
+                    <span className="text-[11px] tabular-nums text-content-subtle w-24 shrink-0">
                       {formatDate(frame.reference_date)}
                     </span>
-                    <span className="text-[11px] text-slate-700 dark:text-slate-300">
+                    <span className="text-[11px] text-content-muted">
                       {frame.events.length} active event(s)
                       {frame.events.some((e) => e.transition) && (
-                        <span className="text-slate-400">
+                        <span className="text-content-subtle">
                           {' '}
                           · {frame.events.filter((e) => e.transition).length} transition(s)
                         </span>
