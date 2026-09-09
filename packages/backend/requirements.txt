@@ -9,13 +9,13 @@ pydantic==2.10.4
 pydantic-settings==2.7.0
 email-validator==2.2.0
 
-# Database
+# Database Configurations 
 sqlalchemy==2.0.36
 greenlet==3.1.1
 asyncpg==0.30.0
 alembic==1.14.0
 
-# Auth.
+# Auth Setup .
 # PyJWT rather than python-jose: python-jose is effectively unmaintained and
 # 3.3.0 carries CVE-2024-33663/33664.
 # bcrypt directly rather than passlib: passlib's last release (1.7.4, 2020)
