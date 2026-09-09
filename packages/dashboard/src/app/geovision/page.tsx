@@ -1,123 +1,194 @@
 // packages/dashboard/src/app/geovision/page.tsx
 'use client'
 
-import Navigation from '@/components/shared/Navigation'
-import { 
-  Map, 
-  TrendingUp, 
-  AlertTriangle, 
-  Droplets,
-  Activity,
-  CloudRain,
-  Thermometer,
-  RefreshCw
-} from 'lucide-react'
+import { Database, LayoutGrid, Siren } from 'lucide-react'
 import { useState } from 'react'
 
-export default function GeoVisionPage() {
-  const [selectedTehsil, setSelectedTehsil] = useState('All')
+import AppShell from '@/components/shell/AppShell'
+import ProtectedRoute from '@/components/shared/ProtectedRoute'
+import CommandHeader from '@/components/geovision/CommandHeader'
+import DataSourceCatalog from '@/components/geovision/DataSourceCatalog'
+import GisMapPanel from '@/components/geovision/GisMapPanel'
+import GlobalFilters from '@/components/geovision/GlobalFilters'
+import IngestionMonitor from '@/components/geovision/IngestionMonitor'
+import KpiGrid from '@/components/geovision/KpiGrid'
+import RegionDetailPanel from '@/components/geovision/RegionDetailPanel'
+import SatelliteWatch from '@/components/geovision/SatelliteWatch'
+import SituationCenter from '@/components/geovision/SituationCenter'
+import SystemStatusBar from '@/components/geovision/SystemStatusBar'
+import TrendPanel from '@/components/geovision/TrendPanel'
+import VegetationTable from '@/components/geovision/VegetationTable'
+import { EmptyState, ErrorState, errorMessage } from '@/components/geovision/primitives'
+import {
+  useHierarchy,
+  useIngestionStatus,
+  useOverview,
+  useRefreshAll,
+} from '@/hooks/useGeovision'
 
-  const stats = [
-    { label: 'Drought Severity', value: 'Moderate', change: '+2%', icon: AlertTriangle, color: 'text-yellow-500', bg: 'bg-yellow-50' },
-    { label: 'Flood Risk', value: 'Low', change: '-5%', icon: Droplets, color: 'text-green-500', bg: 'bg-green-50' },
-    { label: 'Vegetation Health', value: 'Good', change: '+8%', icon: TrendingUp, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-    { label: 'Tehsils Monitored', value: '148', change: '', icon: Map, color: 'text-blue-500', bg: 'bg-blue-50' },
-  ]
+/**
+ * GeoVision AI — Satellite & Multi-Hazard Intelligence Command Center.
+ *
+ * Layout follows the operational hierarchy: identity and system state first,
+ * then the filters that scope everything below, then the headline indicators,
+ * then the map as the primary visual, then analysis, then the operational
+ * panels an operator checks when something looks wrong.
+ *
+ * Every number on this page comes from the backend, which derives it from
+ * observations the ingestion pipeline actually stored. There is no mock data,
+ * no placeholder series and no hardcoded satellite value anywhere in the tree —
+ * where data is unavailable, components render an explicit empty state.
+ */
+function GeoVisionContent() {
+  const overview = useOverview()
+  const hierarchy = useHierarchy()
+  const ingestion = useIngestionStatus()
+  const refreshAll = useRefreshAll()
+  const [refreshing, setRefreshing] = useState(false)
+  // Two views over one filter state, rather than a second page: the existing
+  // monitoring dashboard is unchanged and the operational view sits beside it,
+  // so nothing that already worked is disturbed.
+  const [view, setView] = useState<'monitoring' | 'situation'>('monitoring')
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    try {
+      await refreshAll()
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  // An empty database is a distinct state from a broken one, and gets its own
+  // message telling the operator exactly how to populate it.
+  const hasData =
+    overview.data !== undefined &&
+    overview.data.data_source !== 'no_data' &&
+    overview.data.coverage.observations > 0
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation />
+    <AppShell title="GIS Command Centre" flush>
+      <CommandHeader
+        freshness={overview.data?.freshness}
+        isRefreshing={refreshing || overview.isFetching}
+        onRefresh={handleRefresh}
+      />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">GeoVision AI</h1>
-            <p className="text-sm text-gray-500">AI-Powered Remote Sensing Platform</p>
-          </div>
-          <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm">
-            <RefreshCw className="w-4 h-4" />
-            Refresh Data
-          </button>
-        </div>
+      <SystemStatusBar
+        overview={overview.data}
+        ingestion={ingestion.data}
+        isLoading={overview.isLoading || ingestion.isLoading}
+        isError={overview.isError}
+      />
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          {stats.map((stat, i) => (
-            <div key={i} className="bg-white rounded-xl border border-gray-200/50 p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className={`${stat.bg} p-2 rounded-lg`}>
-                  <stat.icon className={`w-5 h-5 ${stat.color}`} />
-                </div>
-                {stat.change && (
-                  <span className={`text-xs font-medium ${stat.change.startsWith('+') ? 'text-green-500' : 'text-red-500'}`}>
-                    {stat.change}
-                  </span>
-                )}
-              </div>
-              <div className="mt-3">
-                <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-                <div className="text-xs text-gray-500">{stat.label}</div>
-              </div>
-            </div>
+      <GlobalFilters hierarchy={hierarchy.data} isLoading={hierarchy.isLoading} />
+
+      <div className="max-w-[1600px] mx-auto px-4 pt-3">
+        <div
+          className="inline-flex rounded border border-slate-300 dark:border-slate-700 overflow-hidden"
+          role="tablist"
+          aria-label="GeoVision view"
+        >
+          {(
+            [
+              ['monitoring', 'Monitoring', LayoutGrid],
+              ['situation', 'Situation Center', Siren],
+            ] as const
+          ).map(([key, label, Icon]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={view === key}
+              onClick={() => setView(key)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-r last:border-r-0 border-slate-300 dark:border-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
+                view === key
+                  ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                  : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+              {label}
+            </button>
           ))}
         </div>
-
-        {/* Main Content - Map + Predictions */}
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Map Section */}
-          <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200/50 p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900">Drought Severity Map</h3>
-              <select 
-                className="text-sm border border-gray-200 rounded-lg px-3 py-1 bg-white"
-                value={selectedTehsil}
-                onChange={(e) => setSelectedTehsil(e.target.value)}
-              >
-                <option value="All">All Tehsils</option>
-                <option value="Lahore">Lahore</option>
-                <option value="Multan">Multan</option>
-                <option value="Faisalabad">Faisalabad</option>
-              </select>
-            </div>
-            <div className="h-80 bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center">
-              <div className="text-center text-gray-500">
-                <Map className="w-12 h-12 mx-auto text-gray-300" />
-                <p className="text-sm">Drought Map Visualization</p>
-                <p className="text-xs text-gray-400">(Map component coming soon)</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Prediction Panel */}
-          <div className="bg-white rounded-xl border border-gray-200/50 p-4 shadow-sm">
-            <h3 className="font-semibold text-gray-900 mb-4">Predictions</h3>
-            <div className="space-y-3">
-              {[
-                { tehsil: 'Lahore', severity: 'Moderate', score: 65, color: 'bg-yellow-500' },
-                { tehsil: 'Multan', severity: 'Severe', score: 25, color: 'bg-red-500' },
-                { tehsil: 'Faisalabad', severity: 'Normal', score: 85, color: 'bg-green-500' },
-              ].map((item, i) => (
-                <div key={i} className="p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-gray-900">{item.tehsil}</span>
-                    <span className={`text-sm font-medium ${item.severity === 'Severe' ? 'text-red-500' : item.severity === 'Moderate' ? 'text-yellow-500' : 'text-green-500'}`}>
-                      {item.severity}
-                    </span>
-                  </div>
-                  <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div className={`h-full ${item.color} rounded-full transition-all`} style={{ width: `${item.score}%` }}></div>
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                    <span>Score: {item.score}%</span>
-                    <span>{item.severity}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
       </div>
-    </div>
+
+      <div className="max-w-[1600px] mx-auto px-4 py-4 space-y-4">
+        {view === 'situation' && <SituationCenter />}
+
+        {view === 'monitoring' && overview.isError && (
+          <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900 rounded-lg">
+            <ErrorState
+              title="Unable to load the command centre"
+              detail={errorMessage(overview.error)}
+              onRetry={() => overview.refetch()}
+            />
+          </div>
+        )}
+
+        {view === 'monitoring' && !overview.isLoading && !overview.isError && !hasData && (
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
+            <EmptyState
+              icon={Database}
+              title="No satellite observations stored yet"
+              detail={
+                <>
+                  The Earth Engine acquisition pipeline has not stored any data.
+                  From{' '}
+                  <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[11px]">
+                    packages/backend
+                  </code>
+                  , run{' '}
+                  <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[11px]">
+                    python -m app.ingestion.cli check-config
+                  </code>{' '}
+                  then{' '}
+                  <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[11px]">
+                    python -m app.ingestion.cli daily
+                  </code>
+                  .
+                </>
+              }
+            />
+          </div>
+        )}
+
+        {view === 'monitoring' && (
+          <KpiGrid overview={overview.data} isLoading={overview.isLoading} />
+        )}
+
+        {/* The map stays visible in BOTH views: an operator reading the
+            situation summary still needs to see where the regions are. */}
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4 items-start">
+          <GisMapPanel />
+          <RegionDetailPanel />
+        </div>
+
+        {view === 'monitoring' && (
+          <>
+            <TrendPanel />
+            <SatelliteWatch />
+            <IngestionMonitor />
+            <VegetationTable />
+            <DataSourceCatalog />
+          </>
+        )}
+
+        <footer className="pt-2 pb-6 text-[10px] text-slate-400 dark:text-slate-500">
+          GeoVision AI is a satellite monitoring and analysis system. Indicators
+          shown here are derived from Earth observation data and are not official
+          disaster warnings.
+        </footer>
+      </div>
+    </AppShell>
+  )
+}
+
+export default function GeoVisionPage() {
+  return (
+    <ProtectedRoute>
+      <GeoVisionContent />
+    </ProtectedRoute>
   )
 }

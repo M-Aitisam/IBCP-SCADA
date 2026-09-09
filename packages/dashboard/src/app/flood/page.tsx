@@ -1,27 +1,50 @@
-//  path  packages/dashboard/src/app/flood/page.tsx
+// packages/dashboard/src/app/flood/page.tsx
 'use client'
 
-import Navigation from '@/components/shared/Navigation'
-import { Droplets, AlertTriangle, Clock, Radio, Gauge } from 'lucide-react'
+import Link from 'next/link'
+import { Droplets } from 'lucide-react'
+import AppShell from '@/components/shell/AppShell'
+import ProtectedRoute from '@/components/shared/ProtectedRoute'
+import { Panel, PanelHeader } from '@/components/ui/Card'
+import { EmptyState } from '@/components/ui/States'
+
+function FloodContent() {
+  return (
+    <AppShell title="Flood SCADA">
+      <div className="mx-auto max-w-5xl space-y-4">
+        <Panel flush>
+          <PanelHeader
+            title="Barrage gate control"
+            subtitle="Automated flood diversion and telemetry"
+          />
+          {/* Says what is missing and where the working capability lives,
+              rather than a bare "coming soon" with no next step. */}
+          <EmptyState
+            icon={<Droplets className="h-8 w-8" aria-hidden="true" />}
+            title="SCADA telemetry is not yet connected"
+            description={
+              <>
+                This surface will carry live barrage gate state and water level
+                telemetry. No SCADA endpoint is configured, so there is nothing to
+                display — deliberately blank rather than filled with sample readings.
+                Satellite-derived flood conditions are already available in the{' '}
+                <Link href="/geovision" className="font-medium text-brand hover:underline">
+                  GIS command centre
+                </Link>
+                .
+              </>
+            }
+          />
+        </Panel>
+      </div>
+    </AppShell>
+  )
+}
 
 export default function FloodPage() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <h1 className="text-2xl font-bold text-gray-900">Flood SCADA</h1>
-        <p className="text-sm text-gray-500 mb-6">Automated Barrage Gate Control & Flood Diversion</p>
-        
-        <div className="bg-white rounded-xl border border-gray-200/50 p-6 shadow-sm">
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center text-gray-500">
-              <Droplets className="w-16 h-16 mx-auto text-blue-300" />
-              <p className="text-sm">Flood Monitoring Dashboard</p>
-              <p className="text-xs text-gray-400">(Coming soon)</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <ProtectedRoute>
+      <FloodContent />
+    </ProtectedRoute>
   )
 }

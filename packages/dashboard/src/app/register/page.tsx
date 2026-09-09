@@ -13,8 +13,6 @@ export default function RegisterPage() {
     email: '',
     full_name: '',
     password: '',
-    role: 'user',
-    team: ''
   })
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
@@ -117,7 +115,7 @@ export default function RegisterPage() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                 placeholder="Create a password (min 6 characters)"
                 required
-                minLength={6}
+                minLength={8}
               />
               <button
                 type="button"
@@ -129,21 +127,8 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Team (Optional)
-            </label>
-            <select
-              value={formData.team}
-              onChange={(e) => setFormData({ ...formData, team: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-            >
-              <option value="">Select your team</option>
-              <option value="geovision">🌿 GeoVision AI</option>
-              <option value="flood">🌊 Flood SCADA</option>
-              <option value="soil">🌾 Soil Monitoring</option>
-            </select>
-          </div>
+          {/* Role and team are assigned by an administrator after signup,
+              never chosen by the person registering. */}
 
           <button
             type="submit"

@@ -1,18 +1,40 @@
 # packages/backend/requirements.txt
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-python-multipart==0.0.6
-python-dotenv==1.0.0
-pydantic==2.5.0
-pydantic-settings==2.1.0
-sqlalchemy==2.0.23
-greenlet==3.0.3
-asyncpg==0.29.0
-alembic==1.13.1
-redis==5.0.1
-paho-mqtt==1.6.1
-httpx==0.26.0
-aiofiles==23.2.1
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-email-validator==2.1.0
+# Python 3.11+ (Vercel runs 3.12). Versions below all ship 3.13 wheels.
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+python-dotenv==1.0.1
+pydantic==2.10.4
+pydantic-settings==2.7.0
+email-validator==2.2.0
+
+# Database Configurations 
+sqlalchemy==2.0.36
+greenlet==3.1.1
+asyncpg==0.30.0
+alembic==1.14.0
+
+# Auth Setup .
+# PyJWT rather than python-jose: python-jose is effectively unmaintained and
+# 3.3.0 carries CVE-2024-33663/33664.
+# bcrypt directly rather than passlib: passlib's last release (1.7.4, 2020)
+# reads bcrypt.__about__.__version__, which bcrypt removed in 4.1, so the two
+# cannot both be current.
+pyjwt==2.10.1
+bcrypt==4.2.1
+
+# Services
+redis==5.2.1
+paho-mqtt==2.1.0
+httpx==0.28.1
+aiofiles==24.1.0
+
+# Google Earth Engine acquisition pipeline (app/ingestion).
+# Also required on Vercel for uncached region-boundary exports.
+earthengine-api==1.4.3
+google-auth==2.37.0
+
+# Tests
+pytest==8.3.4
+pytest-asyncio==0.25.0

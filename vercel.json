@@ -1,15 +1,17 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
   "builds": [
     {
       "src": "packages/backend/index.py",
-      "use": "@vercel/python",
-      "config": {
-        "installCommand": "pip install -r packages/backend/requirements.txt"
-      }
+      "use": "@vercel/python"
     },
     {
       "src": "packages/dashboard/package.json",
-      "use": "@vercel/next"
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "out"
+      }
     }
   ],
   "routes": [
@@ -17,10 +19,38 @@
       "src": "/api/(.*)",
       "dest": "packages/backend/index.py"
     },
+
+    {
+      "src": "/_next/(.*)",
+      "dest": "packages/dashboard/_next/$1"
+    },
+
+    {
+      "src": "/",
+      "dest": "packages/dashboard/index.html"
+    },
+
+    {
+      "src": "/(.+)/$",
+      "dest": "packages/dashboard/$1/index.html"
+    },
+
+    {
+      "src": "/(.+\\.[a-zA-Z0-9]+)$",
+      "dest": "packages/dashboard/$1"
+    },
+
+    {
+      "src": "/(.+)$",
+      "dest": "packages/dashboard/$1/index.html"
+    },
+
     { "handle": "filesystem" },
+
     {
       "src": "/(.*)",
-      "dest": "packages/dashboard/$1"
+      "dest": "packages/dashboard/404.html",
+      "status": 404
     }
   ]
 }
