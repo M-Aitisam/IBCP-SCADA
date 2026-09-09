@@ -30,7 +30,7 @@ A unified mega system for flood management, water distribution, and agricultural
 | **Frontend** | Next.js + TypeScript + Tailwind CSS |
 | **Backend** | FastAPI + Python |
 | **Database** | Supabase PostgreSQL + TimescaleDB |
-| **ML** | XGBoost + Google Earth Engine |
+| **ML** | XGBoost + Google Earth Engine GEE |
 | **Auth** | JWT + Google OAuth |
 | **Real-time** | MQTT + WebSockets |
 
