@@ -2,7 +2,8 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 
 export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
+  process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, '') ||
+  (process.env.NODE_ENV === 'production' ? '/api/v1' : 'http://localhost:8000/api/v1')
 
 export const TOKEN_KEY = 'access_token'
 export const USER_KEY = 'user'

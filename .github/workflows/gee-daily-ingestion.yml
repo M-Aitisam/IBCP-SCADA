@@ -98,6 +98,9 @@ jobs:
           GEE_SERVICE_ACCOUNT: ${{ secrets.GEE_SERVICE_ACCOUNT }}
           GEE_PRIVATE_KEY: ${{ secrets.GEE_PRIVATE_KEY_BASE64 }}
           GEE_ROI_GEOJSON_PATH: ${{ vars.GEE_ROI_GEOJSON_PATH }}
+          # Match the API's region scope; empty means all Pakistan.
+          GEE_ROI_PROVINCES: ${{ vars.GEE_ROI_PROVINCES }}
+          GEE_DAILY_ENABLED: ${{ vars.GEE_DAILY_ENABLED || 'true' }}
           # Dispatch inputs reach the script as environment variables, never as
           # text interpolated into the command line. start_date/end_date are
           # free-form strings, so `${{ }}` inside `run:` would let anyone able
@@ -140,6 +143,9 @@ jobs:
             export GEE_TARGET_END="$IN_END"
           elif [ -n "${DEFAULT_TARGET_END:-}" ]; then
             export GEE_TARGET_END="$DEFAULT_TARGET_END"
+          elif [ "$MODE" = "daily" ]; then
+            # Daily ingestion must advance beyond the historical backfill cutoff.
+            export GEE_TARGET_END="$(date -u +%F)"
           fi
 
           ARGS=("$MODE" "--json")
