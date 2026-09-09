@@ -78,3 +78,5 @@ packages/dashboard/out/
 
 # GitHub Pages
 .github/pages/
+
+Add-Content .gitignore ".gee/ibcp-scada-key.json"

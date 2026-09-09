@@ -9,6 +9,7 @@ from alembic import context
 from app.core.config import settings
 from app.db.database import Base
 from app.db import models  # noqa: F401 — registers tables on Base.metadata
+from app.databases.timestampdb import models as timestampdb_models  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)

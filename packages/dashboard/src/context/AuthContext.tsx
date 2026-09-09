@@ -1,144 +1,187 @@
 // packages/dashboard/src/context/AuthContext.tsx
 'use client'
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  ReactNode,
+} from 'react'
 import { useRouter } from 'next/navigation'
-import axios from 'axios'
+import apiClient, {
+  apiErrorMessage,
+  clearSession,
+  TOKEN_KEY,
+  USER_KEY,
+} from '@/utils/axios'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
-
-// Helper functions for sessionStorage
-const TOKEN_KEY = 'access_token'
-const USER_KEY = 'user'
-
-const getToken = () => sessionStorage.getItem(TOKEN_KEY)
-const setToken = (token: string) => sessionStorage.setItem(TOKEN_KEY, token)
-const removeToken = () => sessionStorage.removeItem(TOKEN_KEY)
-
-const getUser = () => {
-  const user = sessionStorage.getItem(USER_KEY)
-  return user ? JSON.parse(user) : null
-}
-const setUser = (user: any) => sessionStorage.setItem(USER_KEY, JSON.stringify(user))
-const removeUser = () => sessionStorage.removeItem(USER_KEY)
-
-interface User {
+export interface User {
   id: string
   username: string
   email: string
-  full_name: string
+  full_name: string | null
   role: string
   team: string | null
 }
 
+export interface RegisterData {
+  username: string
+  email: string
+  full_name?: string
+  password: string
+}
+
 interface AuthContextType {
   user: User | null
+  /** True until the stored session has been verified against the server. */
   loading: boolean
   login: (username: string, password: string) => Promise<void>
   loginWithToken: (token: string, user: User) => void
-  register: (data: any) => Promise<void>
-  logout: () => Promise<void>
+  register: (data: RegisterData) => Promise<void>
+  logout: () => void
   isAuthenticated: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+function readStoredUser(): User | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(USER_KEY)
+    return raw ? (JSON.parse(raw) as User) : null
+  } catch {
+    // Corrupt JSON in storage should not brick the app.
+    return null
+  }
+}
+
+function writeSession(token: string, user: User): void {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.setItem(TOKEN_KEY, token)
+  window.sessionStorage.setItem(USER_KEY, JSON.stringify(user))
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUserState] = useState<User | null>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
-    const token = getToken()
-    const userData = getUser()
-    
-    if (token && userData) {
-      setUserState(userData)
-      verifyToken(token)
-    }
-    setLoading(false)
-  }, [])
+    let cancelled = false
 
-  const verifyToken = async (token: string) => {
-    try {
-      const response = await axios.get(`${API_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      setUserState(response.data)
-      setUser(response.data)
-    } catch (error) {
-      sessionStorage.clear()
-      setUserState(null)
-    }
-  }
+    async function restoreSession() {
+      const stored = readStoredUser()
+      if (!stored) {
+        // Nothing to verify; we are definitively signed out.
+        if (!cancelled) setLoading(false)
+        return
+      }
 
-  const login = async (username: string, password: string) => {
-    const formData = new FormData()
-    formData.append('username', username)
-    formData.append('password', password)
+      // Optimistically render the stored user so a reload does not flash the
+      // signed-out UI, but keep `loading` true until the server confirms.
+      if (!cancelled) setUser(stored)
 
-    const response = await axios.post(`${API_URL}/auth/token`, formData)
-    const { access_token, user } = response.data
-    
-    setToken(access_token)
-    setUser(user)
-    setUserState(user)
-    
-    router.push('/dashboard')
-  }
-
-  const loginWithToken = (token: string, userData: User) => {
-    setToken(token)
-    setUser(userData)
-    setUserState(userData)
-    router.push('/dashboard')
-  }
-
-  const register = async (data: any) => {
-    try {
-      // Send registration data
-      const response = await axios.post(`${API_URL}/auth/register`, data)
-      console.log('Registration successful:', response.data)
-      
-      // Auto-login after registration
-      await login(data.username, data.password)
-    } catch (error: any) {
-      console.error('Registration error:', error)
-      
-      if (error.response) {
-        // Server responded with error
-        throw new Error(error.response.data.detail || 'Registration failed')
-      } else if (error.request) {
-        // No response from server
-        throw new Error('Cannot connect to server. Make sure backend is running on port 8000')
-      } else {
-        throw new Error('Registration failed. Please try again.')
+      try {
+        const { data } = await apiClient.get<User>('/auth/me')
+        if (!cancelled) {
+          setUser(data)
+          writeSession(window.sessionStorage.getItem(TOKEN_KEY) ?? '', data)
+        }
+      } catch {
+        // Token expired or revoked. The 401 interceptor already cleared
+        // storage; make sure in-memory state agrees.
+        if (!cancelled) {
+          clearSession()
+          setUser(null)
+        }
+      } finally {
+        // Previously this ran synchronously alongside a floating promise, so
+        // consumers saw loading:false while verification was still in flight
+        // and briefly rendered an authenticated UI for a revoked token.
+        if (!cancelled) setLoading(false)
       }
     }
-  }
 
-  const logout = async () => {
-    sessionStorage.clear()
-    setUserState(null)
+    void restoreSession()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const login = useCallback(
+    async (username: string, password: string) => {
+      // The token endpoint is OAuth2 password flow: form-encoded, not JSON.
+      const form = new URLSearchParams()
+      form.append('username', username)
+      form.append('password', password)
+
+      const { data } = await apiClient.post('/auth/token', form, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      })
+      writeSession(data.access_token, data.user)
+      setUser(data.user)
+      router.push('/dashboard')
+    },
+    [router]
+  )
+
+  const loginWithToken = useCallback(
+    (token: string, userData: User) => {
+      writeSession(token, userData)
+      setUser(userData)
+      router.push('/dashboard')
+    },
+    [router]
+  )
+
+  const register = useCallback(
+    async (data: RegisterData) => {
+      try {
+        await apiClient.post('/auth/register', data)
+      } catch (error) {
+        throw new Error(apiErrorMessage(error, 'Registration failed'))
+      }
+      // Sign in with the same credentials so the user lands authenticated.
+      try {
+        await login(data.username, data.password)
+      } catch (error) {
+        throw new Error(
+          apiErrorMessage(error, 'Account created, but automatic sign-in failed.')
+        )
+      }
+    },
+    [login]
+  )
+
+  const logout = useCallback(() => {
+    clearSession()
+    setUser(null)
+    // Fire-and-forget: logout is client-side, so a network failure here must
+    // not keep the user signed in locally.
+    void apiClient.post('/auth/logout').catch(() => undefined)
     router.push('/login')
-  }
+  }, [router])
 
-  return (
-    <AuthContext.Provider value={{
+  const value = useMemo<AuthContextType>(
+    () => ({
       user,
       loading,
       login,
       loginWithToken,
       register,
       logout,
-      isAuthenticated: !!user
-    }}>
-      {children}
-    </AuthContext.Provider>
+      isAuthenticated: user !== null,
+    }),
+    [user, loading, login, loginWithToken, register, logout]
   )
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-export function useAuth() {
+export function useAuth(): AuthContextType {
   const context = useContext(AuthContext)
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider')

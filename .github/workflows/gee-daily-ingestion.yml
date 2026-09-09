@@ -1,0 +1,182 @@
+# .github/workflows/gee-daily-ingestion.yml
+#
+# Daily Earth Engine acquisition.
+#
+# The backend deploys to Vercel as a serverless function, which has neither a
+# persistent scheduler nor a long enough execution budget for this work, so the
+# schedule lives here instead. The job is safe to re-run: writes are idempotent
+# upserts keyed on the source image, so a retry or an overlapping run cannot
+# duplicate observations.
+#
+# Historical backfill is deliberately NOT wired to any schedule - it is a
+# manual, explicit operation. See docs/GEE_INGESTION.md.
+
+name: GEE daily ingestion
+
+on:
+  schedule:
+    # 02:30 UTC daily. Late enough that the previous day's CHIRPS and MODIS
+    # products have usually published, early enough to be ready by morning PKT.
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "daily (incremental) or backfill (historical, resumable)"
+        type: choice
+        default: daily
+        options: [daily, backfill]
+      dry_run:
+        description: "Run without writing to timestampdb"
+        type: boolean
+        default: false
+      dataset:
+        description: "Limit to one dataset (blank = all enabled)"
+        type: choice
+        default: ""
+        options: ["", sentinel2, mod13q1, chirps, mod11a2, sentinel1]
+      start_date:
+        # Overrides GEE_HISTORICAL_START. Only meaningful for a backfill.
+        description: "Backfill window start, YYYY-MM-DD (blank = configured default)"
+        type: string
+        default: ""
+      end_date:
+        # A *requested* cutoff. The pipeline clamps it to what GEE actually
+        # publishes and reports the shortfall rather than filling it in.
+        description: "Requested window end, YYYY-MM-DD (blank = configured default)"
+        type: string
+        default: ""
+
+concurrency:
+  # Never let two ingestion runs overlap; the second would only redo work.
+  group: gee-ingestion
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    # A daily run is minutes. A ten-year backfill across 119 districts is
+    # hours, so it gets close to the GitHub-hosted ceiling (6h). It stays
+    # resumable either way: the per-dataset cursor means a timeout costs the
+    # current chunk, not the whole run.
+    timeout-minutes: ${{ inputs.mode == 'backfill' && 350 || 60 }}
+
+    defaults:
+      run:
+        working-directory: packages/backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: packages/backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Apply database migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: alembic upgrade head
+
+      - name: Report configuration and verify GEE auth
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GEE_PROJECT_ID: ${{ secrets.GEE_PROJECT_ID }}
+          GEE_SERVICE_ACCOUNT: ${{ secrets.GEE_SERVICE_ACCOUNT }}
+          # Store this secret base64-encoded; GitHub secrets mangle the
+          # newlines inside a raw service-account JSON key.
+          GEE_PRIVATE_KEY: ${{ secrets.GEE_PRIVATE_KEY_BASE64 }}
+        run: python -m app.ingestion.cli check-config
+
+      - name: Run ingestion
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GEE_PROJECT_ID: ${{ secrets.GEE_PROJECT_ID }}
+          GEE_SERVICE_ACCOUNT: ${{ secrets.GEE_SERVICE_ACCOUNT }}
+          GEE_PRIVATE_KEY: ${{ secrets.GEE_PRIVATE_KEY_BASE64 }}
+          GEE_ROI_GEOJSON_PATH: ${{ vars.GEE_ROI_GEOJSON_PATH }}
+          # Dispatch inputs reach the script as environment variables, never as
+          # text interpolated into the command line. start_date/end_date are
+          # free-form strings, so `${{ }}` inside `run:` would let anyone able
+          # to dispatch this workflow inject shell.
+          IN_MODE: ${{ inputs.mode }}
+          IN_DRY_RUN: ${{ inputs.dry_run }}
+          IN_DATASET: ${{ inputs.dataset }}
+          IN_START: ${{ inputs.start_date }}
+          IN_END: ${{ inputs.end_date }}
+          DEFAULT_TARGET_END: ${{ vars.GEE_TARGET_END }}
+        run: |
+          set -euo pipefail
+
+          # A scheduled run supplies no inputs at all.
+          MODE="${IN_MODE:-daily}"
+          case "$MODE" in
+            daily|backfill) ;;
+            *) echo "::error::unsupported mode '$MODE'"; exit 1 ;;
+          esac
+
+          # Validate the date shape before it can reach the pipeline. Rejecting
+          # here gives a clear failure instead of a confusing pydantic error.
+          #
+          # Note the `if` blocks rather than `[ test ] && action` throughout:
+          # under `set -e` a false test is a failed command, so the shorthand
+          # would abort the run on the ordinary empty-input path.
+          check_date() {
+            if [ -n "$2" ] && ! echo "$2" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
+              echo "::error::$1 must be YYYY-MM-DD, got '$2'"
+              exit 1
+            fi
+          }
+          check_date start_date "${IN_START:-}"
+          check_date end_date "${IN_END:-}"
+
+          if [ -n "${IN_START:-}" ]; then
+            export GEE_HISTORICAL_START="$IN_START"
+          fi
+          if [ -n "${IN_END:-}" ]; then
+            export GEE_TARGET_END="$IN_END"
+          elif [ -n "${DEFAULT_TARGET_END:-}" ]; then
+            export GEE_TARGET_END="$DEFAULT_TARGET_END"
+          fi
+
+          ARGS=("$MODE" "--json")
+          if [ "${IN_DRY_RUN:-false}" = "true" ]; then
+            ARGS+=("--dry-run")
+          fi
+          # Comma-separated list from the API becomes repeated --dataset flags.
+          if [ -n "${IN_DATASET:-}" ]; then
+            IFS=',' read -ra NAMES <<< "$IN_DATASET"
+            for name in "${NAMES[@]}"; do
+              if [ -n "$name" ]; then
+                ARGS+=("--dataset" "$name")
+              fi
+            done
+          fi
+
+          echo "Running: python -m app.ingestion.cli ${ARGS[*]}"
+          python -m app.ingestion.cli "${ARGS[@]}" | tee "$GITHUB_STEP_SUMMARY"
+
+      # Phase 32: the analytics cascade runs after ingestion, in the same job,
+      # so a night's new observations are scored, baselined, turned into hazard
+      # scores and evaluated for alerts before anyone looks at the dashboard.
+      #
+      # `if: always()` on purpose. Ingestion partly failing is a normal state
+      # (one product lagging), and the datasets that DID land should still be
+      # analysed. The cascade isolates its own stage failures internally.
+      - name: Run analytics cascade
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          python -m app.ingestion.cli analytics --json | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # The CLI exits non-zero only when every dataset failed. A partial
+      # success (one product lagging or briefly unavailable) is a normal,
+      # reportable state and must not page anyone.
+      - name: Flag total failure
+        if: failure()
+        run: echo "::error::GEE ingestion failed for every dataset - check the run log above"
