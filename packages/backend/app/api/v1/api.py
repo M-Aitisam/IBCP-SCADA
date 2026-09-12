@@ -8,6 +8,7 @@ from .endpoints import (
     geovision,
     ingestion,
     intelligence,
+    ml,
     soil,
 )
 
@@ -27,3 +28,4 @@ api_router.include_router(
 )
 api_router.include_router(flood.router, prefix="/flood", tags=["Flood SCADA"])
 api_router.include_router(soil.router, prefix="/soil", tags=["Soil Monitoring"])
+api_router.include_router(ml.router, prefix="/ml", tags=["ML Prediction"])

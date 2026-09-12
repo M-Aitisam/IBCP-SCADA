@@ -89,7 +89,7 @@ jobs:
           # Store this secret base64-encoded; GitHub secrets mangle the
           # newlines inside a raw service-account JSON key.
           GEE_PRIVATE_KEY: ${{ secrets.GEE_PRIVATE_KEY_BASE64 }}
-        run: python -m app.ingestion.cli check-config
+        run: python -m app.ingestion.cli --json check-config
 
       - name: Run ingestion
         env:
@@ -148,7 +148,10 @@ jobs:
             export GEE_TARGET_END="$(date -u +%F)"
           fi
 
-          ARGS=("$MODE" "--json")
+          # -----------------------------------------------------------------
+          # FIXED: --json must come BEFORE the subcommand (daily/backfill)
+          # -----------------------------------------------------------------
+          ARGS=("--json" "$MODE")
           if [ "${IN_DRY_RUN:-false}" = "true" ]; then
             ARGS+=("--dry-run")
           fi
@@ -178,7 +181,10 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           set -euo pipefail
-          python -m app.ingestion.cli analytics --json | tee -a "$GITHUB_STEP_SUMMARY"
+          # -----------------------------------------------------------------
+          # FIXED: --json must come BEFORE the 'analytics' subcommand
+          # -----------------------------------------------------------------
+          python -m app.ingestion.cli --json analytics | tee -a "$GITHUB_STEP_SUMMARY"
 
       # The CLI exits non-zero only when every dataset failed. A partial
       # success (one product lagging or briefly unavailable) is a normal,

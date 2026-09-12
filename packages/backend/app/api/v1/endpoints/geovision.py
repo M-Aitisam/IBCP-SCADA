@@ -280,18 +280,42 @@ async def get_drought_data(_user: User = Depends(get_current_user)):
 
 
 @router.get("/predict")
-async def get_prediction(_user: User = Depends(get_current_user)):
-    """Model predictions — NOT YET IMPLEMENTED.
+async def get_prediction(
+    region_id: Optional[str] = Query(None, description="Region to forecast; required once a model exists"),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """2-week-ahead drought severity prediction.
 
-    No model has been trained. The previous hardcoded accuracy and confidence
-    figures described a model that does not exist.
+    Delegates to the real trained model at app.services.ml.predictor once one
+    exists (see packages/ml-pipeline). Kept as an honest "not_implemented"
+    until then — this endpoint's earlier hardcoded accuracy/confidence figures
+    described a model that did not exist, which is exactly what this must not
+    regress back into.
     """
-    return {
-        "status": "not_implemented",
-        "data_source": "none",
-        "detail": "No prediction model has been trained yet.",
-        "predictions": None,
-    }
+    from app.services.ml.predictor import ModelNotAvailable, get_predictor
+
+    try:
+        get_predictor()
+    except ModelNotAvailable as exc:
+        return {
+            "status": "not_implemented",
+            "data_source": "none",
+            "detail": str(exc),
+            "predictions": None,
+        }
+
+    if not region_id:
+        raise HTTPException(
+            status_code=422,
+            detail="A trained model is available — pass ?region_id=... to forecast, "
+            "or use POST /api/v1/ml/predict/drought directly.",
+        )
+
+    from app.api.v1.endpoints.ml import PredictRequest, predict_drought
+
+    result = await predict_drought(PredictRequest(region_id=region_id), db=db, _user=_user)
+    return {"status": "ok", "data_source": "model", "predictions": [result]}
 
 
 # ===========================================================================
