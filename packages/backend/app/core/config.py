@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     GITHUB_DISPATCH_TOKEN: Optional[str] = None  # PAT with `actions: write`
     GITHUB_WORKFLOW_FILE: str = "gee-daily-ingestion.yml"
     GITHUB_WORKFLOW_REF: str = "main"
+    # Same dispatch mechanism, separate workflow: retraining the drought model
+    # is CPU/IO-bound and takes minutes, well outside a Vercel function budget.
+    ML_TRAINING_WORKFLOW_FILE: str = "ml-training.yml"
 
     # Google OAuth
     GOOGLE_CLIENT_ID: Optional[str] = None
