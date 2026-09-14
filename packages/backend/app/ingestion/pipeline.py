@@ -211,6 +211,7 @@ class IngestionPipeline:
         dry_run: bool = False,
         only: Optional[list[str]] = None,
         today: Optional[date] = None,
+        window_override: Optional[DateWindow] = None,
     ) -> RunResult:
         run_id = _make_run_id(mode)
         started = datetime.now(timezone.utc)
@@ -229,7 +230,9 @@ class IngestionPipeline:
 
         datasets = enabled_datasets(only)
         for config in datasets:
-            outcome = await self._run_dataset(config, mode, dry_run, today, run_id)
+            outcome = await self._run_dataset(
+                config, mode, dry_run, today, run_id, window_override
+            )
             result.outcomes.append(outcome)
 
         totals = result.totals
@@ -279,6 +282,7 @@ class IngestionPipeline:
         dry_run: bool,
         today: Optional[date],
         run_id: str,
+        window_override: Optional[DateWindow] = None,
     ) -> DatasetOutcome:
         """Process one dataset. Never raises: failures become an outcome."""
         outcome = DatasetOutcome(dataset=config.name, asset_id=config.asset_id)
@@ -321,7 +325,9 @@ class IngestionPipeline:
                 return outcome
 
             checkpoint = await self.store.get_checkpoint(config.name)
-            window = self._window_for(mode, config, checkpoint, today, latest_available)
+            window = window_override or self._window_for(
+                mode, config, checkpoint, today, latest_available
+            )
             outcome.window = repr(window)
 
             if window.is_empty:

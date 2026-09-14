@@ -17,17 +17,20 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import sys
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Optional
 
 from app.databases.timestampdb.repository import DryRunRepository, TimestampRepository
 from app.db.database import AsyncSessionLocal, engine
+from app.ingestion.backfill import planned_rows, validate_datasets
 from app.ingestion.config import ingestion_settings
 from app.ingestion.gee_client import EarthEngineClient, GEEAuthError
 from app.ingestion.pipeline import IngestionPipeline
 from app.ingestion.registry import DATASETS, FUTURE_DATASETS, validate_registry
 from app.ingestion.roi import ROIConfigurationError
+from app.ingestion.windows import DateWindow
 
 logger = logging.getLogger("app.ingestion")
 
@@ -43,6 +46,26 @@ def configure_logging(verbose: bool) -> None:
     )
     # asyncpg/sqlalchemy chatter drowns the run summary otherwise.
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+
+
+def _backfill_args(args: argparse.Namespace) -> tuple[date, date, list[str]]:
+    start = date.fromisoformat(args.start_date or os.getenv("BACKFILL_START_DATE", "") or ingestion_settings.GEE_HISTORICAL_START.isoformat())
+    end = date.fromisoformat(args.end_date or os.getenv("BACKFILL_END_DATE", "") or ingestion_settings.GEE_TARGET_END.isoformat())
+    env_datasets = [item.strip() for item in os.getenv("BACKFILL_DATASETS", "").split(",") if item.strip()]
+    return start, end, validate_datasets(args.dataset or env_datasets or None)
+
+
+async def _backfill_status(repo: TimestampRepository) -> int:
+    rows = await repo.backfill_progress()
+    counts: dict[str, int] = {}
+    for row in rows:
+        counts[row.status] = counts.get(row.status, 0) + 1
+    print("GEE BACKFILL STATUS")
+    print("-" * 20)
+    print(f"chunks: {len(rows)}  " + "  ".join(f"{key}: {value}" for key, value in sorted(counts.items())))
+    for row in rows:
+        print(f"{row.dataset:<10} {row.chunk_start}..{row.chunk_end} {row.status:<9} attempts={row.attempts} records=+{row.records_inserted}")
+    return 0
 
 
 async def _run(args: argparse.Namespace) -> int:
@@ -79,6 +102,37 @@ async def _run(args: argparse.Namespace) -> int:
 
     async with AsyncSessionLocal() as session:
         real_repo = TimestampRepository(session)
+        if args.command == "backfill-plan":
+            start, end, datasets = _backfill_args(args)
+            rows = planned_rows(start, end, datasets)
+            inserted = await real_repo.plan_backfill(rows)
+            print(f"Planned {len(rows)} chunks; inserted {inserted} new chunks.")
+            return 0
+        if args.command == "backfill-status":
+            return await _backfill_status(real_repo)
+        if args.command == "backfill-reset":
+            removed = await real_repo.reset_backfill(args.dataset[0] if args.dataset else None)
+            print(f"Removed {removed} backfill progress row(s).")
+            return 0
+        if args.command == "backfill-next":
+            row = await real_repo.claim_next_backfill()
+            if row is None:
+                print("No pending or retryable backfill chunks remain.")
+                return 0
+            window = DateWindow(row.chunk_start, row.chunk_end + timedelta(days=1))
+            scoped = settings.model_copy(update={"GEE_HISTORICAL_START": row.chunk_start, "GEE_TARGET_END": row.chunk_end})
+            pipeline = IngestionPipeline(store=real_repo, settings=scoped)
+            try:
+                result = await pipeline.run(mode="backfill", only=[row.dataset], window_override=window)
+                outcome = result.outcomes[0] if result.outcomes else None
+                success = outcome is not None and outcome.status == "success"
+                await real_repo.finish_backfill(row.id, status="completed" if success else "failed", records_inserted=outcome.records_inserted if outcome else 0, error=outcome.error if outcome else "no dataset outcome")
+                print(result.render())
+                return 0 if success else 1
+            except Exception as exc:  # noqa: BLE001 - queue state must record all failures
+                await real_repo.finish_backfill(row.id, status="failed", error=f"{type(exc).__name__}: {exc}")
+                logger.exception("backfill chunk failed")
+                return 1
         # Dry run still reads the real database (for resume points and
         # existing-key checks) but suppresses every write.
         store = DryRunRepository(real_repo) if args.dry_run else real_repo
@@ -266,6 +320,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub.add_parser("check-config", help="show configuration and verify GEE auth")
 
+    plan = sub.add_parser("backfill-plan", help="create the automated backfill queue")
+    plan.add_argument("--dataset", action="append", choices=sorted(DATASETS))
+    plan.add_argument("--start-date")
+    plan.add_argument("--end-date")
+    sub.add_parser("backfill-status", help="show automated backfill progress")
+    reset = sub.add_parser("backfill-reset", help="delete automated backfill progress")
+    reset.add_argument("--dataset", action="append", choices=sorted(DATASETS))
+    sub.add_parser("backfill-next", help="run one oldest eligible backfill chunk")
+
     analytics = sub.add_parser(
         "analytics",
         help="run the analytics cascade (quality, baselines, features, hazards, alerts, brief)",
@@ -300,6 +363,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     configure_logging(args.verbose)
     for attr, default in (("dry_run", False), ("dataset", None), ("regions", None),
+                          ("start_date", None), ("end_date", None),
                           ("days", None), ("restart", False), ("force", False),
                           ("date", None), ("stage", None), ("resume", None)):
         if not hasattr(args, attr):

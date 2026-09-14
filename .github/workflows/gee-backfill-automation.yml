@@ -1,0 +1,65 @@
+name: GEE automated backfill
+
+on:
+  schedule:
+    - cron: "0 */4 * * *"
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: "Inclusive start date (YYYY-MM-DD)"
+        required: false
+        type: string
+      end_date:
+        description: "Inclusive end date (YYYY-MM-DD)"
+        required: false
+        type: string
+      datasets:
+        description: "Comma-separated datasets (blank means all five)"
+        required: false
+        type: string
+
+concurrency:
+  group: gee-backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: packages/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: packages/backend/requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Apply database migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: alembic upgrade head
+      - name: Plan missing chunks
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKFILL_START_DATE: ${{ inputs.start_date || vars.GEE_HISTORICAL_START || '2024-01-01' }}
+          BACKFILL_END_DATE: ${{ inputs.end_date || vars.GEE_TARGET_END }}
+          BACKFILL_DATASETS: ${{ inputs.datasets || vars.GEE_BACKFILL_DATASETS }}
+        run: python -m app.ingestion.cli backfill-plan | tee "$GITHUB_STEP_SUMMARY"
+      - name: Process oldest eligible chunk
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GEE_PROJECT_ID: ${{ secrets.GEE_PROJECT_ID }}
+          GEE_SERVICE_ACCOUNT: ${{ secrets.GEE_SERVICE_ACCOUNT }}
+          GEE_PRIVATE_KEY: ${{ secrets.GEE_PRIVATE_KEY_BASE64 }}
+          GEE_ROI_GEOJSON_PATH: ${{ vars.GEE_ROI_GEOJSON_PATH }}
+          GEE_ROI_PROVINCES: ${{ vars.GEE_ROI_PROVINCES }}
+        run: python -m app.ingestion.cli backfill-next | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Show queue status
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m app.ingestion.cli backfill-status | tee -a "$GITHUB_STEP_SUMMARY"
