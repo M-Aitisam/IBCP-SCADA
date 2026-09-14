@@ -1,12 +1,3 @@
-# 📝  README.md with Complete Setup Instructions
-
-Here's your  `README.md` with all the commands and environment setup instructions.
-
----
-
-## 📋 Replace `README.md` with This:
-
-```markdown
 # IBCP-SCADA - Indus Basin Cyber-Physical SCADA System
 
 A unified mega system for flood management, water distribution, and agricultural intelligence in Pakistan's Indus Basin.
@@ -276,67 +267,6 @@ Go to Vercel Dashboard → Settings → Environment Variables:
 
 ---
 
-## 📁 Project Structure
-
-```
-IBCP-SCADA/
-├── packages/
-│   ├── backend/
-│   │   ├── app/
-│   │   │   ├── api/          # API endpoints
-│   │   │   ├── core/         # Config & security
-│   │   │   ├── db/           # Database models
-│   │   │   └── main.py       # FastAPI entry point
-│   │   ├── migrations/       # Alembic migrations
-│   │   ├── requirements.txt
-│   │   └── .env
-│   ├── dashboard/
-│   │   ├── src/
-│   │   │   ├── app/          # Next.js pages
-│   │   │   ├── components/   # React components
-│   │   │   └── context/      # Auth & Theme context
-│   │   ├── package.json
-│   │   └── .env.local
-│   └── ml-pipeline/
-│       ├── gee/              # GEE scripts
-│       ├── models/           # Trained ML models
-│       └── scripts/          # Training scripts
-├── vercel.json
-└── README.md
-```
-
----
-
-## 📝 Environment Variables Reference
-
-### Backend `.env`
-
-```env
-# Database
-DATABASE_URL=postgresql://...
-
-# Redis
-REDIS_URL=redis://localhost:6379
-
-# MQTT
-MQTT_BROKER=localhost
-MQTT_PORT=1883
-
-# JWT
-SECRET_KEY=your-secret-key
-
-# Google OAuth
-GOOGLE_CLIENT_ID=your-client-id
-GOOGLE_CLIENT_SECRET=your-client-secret
-GOOGLE_REDIRECT_URI=http://localhost:8000/api/v1/auth/google/callback
-FRONTEND_URL=http://localhost:3000
-```
-
-### Frontend `.env.local`
-
-```env
-NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
-```
 
 ---
 
@@ -359,25 +289,3 @@ This project is part of Air University Islamabad's Final Year Project.
 **Happy Coding! 🚀**
 ```
 
----
-
-## 🚀 Quick Commands to Update
-
-```bash
-# 1. Replace README.md
-cd C:\Users\aitis\OneDrive\Desktop\IBCP-SCADA
-
-# 2. Copy the content above into README.md
-notepad README.md
-
-# 3. Commit and push
-git add README.md
-git commit -m "docs: Update README with complete setup instructions"
-git push origin aitisam
-```
-
----
-
----
-
-**Your README is now complete and professional!** 🚀📄
