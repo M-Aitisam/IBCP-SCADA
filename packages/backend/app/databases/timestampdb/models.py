@@ -230,6 +230,37 @@ class IngestionCheckpoint(Base):
     last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
+class GeeBackfillProgress(Base):
+    """Durable queue of bounded automated backfill windows."""
+
+    __tablename__ = "gee_backfill_progress"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dataset: Mapped[str] = mapped_column(String(64), nullable=False)
+    chunk_start: Mapped[date] = mapped_column(Date, nullable=False)
+    chunk_end: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    records_inserted: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    finished_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        Index(
+            "uq_gee_backfill_dataset_chunk",
+            "dataset",
+            "chunk_start",
+            unique=True,
+        ),
+        Index("ix_gee_backfill_status_start", "status", "chunk_start"),
+    )
+
+
 class RegionGeometryCache(Base):
     """Persisted region boundaries for the GIS map.
 

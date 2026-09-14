@@ -20,7 +20,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Iterable, Optional, Protocol, Sequence
 
 from sqlalchemy import delete as sa_delete
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy import update as sa_update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +29,7 @@ from app.databases.timestampdb.models import (
     IngestionCheckpoint,
     IngestionLock,
     IngestionRun,
+    GeeBackfillProgress,
     SatelliteObservation,
     build_observation_key,
     utcnow,
@@ -368,6 +369,75 @@ class TimestampRepository:
         if reaped:
             logger.info("marked %d abandoned ingestion run(s)", len(reaped))
         return len(reaped)
+
+    # ---------------- automated backfill queue ----------------
+
+    async def plan_backfill(self, rows: Sequence[dict[str, Any]]) -> int:
+        if not rows:
+            return 0
+        stmt = pg_insert(GeeBackfillProgress).values(rows).on_conflict_do_nothing(
+            index_elements=["dataset", "chunk_start"]
+        )
+        result = await self.session.execute(stmt)
+        await self.session.commit()
+        return result.rowcount or 0
+
+    async def backfill_progress(
+        self, dataset: Optional[str] = None
+    ) -> list[GeeBackfillProgress]:
+        stmt = select(GeeBackfillProgress).order_by(
+            GeeBackfillProgress.chunk_start, GeeBackfillProgress.dataset
+        )
+        if dataset:
+            stmt = stmt.where(GeeBackfillProgress.dataset == dataset)
+        return list((await self.session.execute(stmt)).scalars().all())
+
+    async def claim_next_backfill(self) -> Optional[GeeBackfillProgress]:
+        eligible = or_(
+            GeeBackfillProgress.status == "pending",
+            (GeeBackfillProgress.status == "failed")
+            & (GeeBackfillProgress.attempts < 3),
+        )
+        row = await self.session.scalar(
+            select(GeeBackfillProgress)
+            .where(eligible)
+            .order_by(GeeBackfillProgress.chunk_start, GeeBackfillProgress.dataset)
+            .with_for_update(skip_locked=True)
+        )
+        if row is None:
+            await self.session.rollback()
+            return None
+        row.status = "running"
+        row.attempts += 1
+        row.started_at = utcnow()
+        row.error = None
+        await self.session.commit()
+        return row
+
+    async def finish_backfill(
+        self,
+        progress_id: int,
+        *,
+        status: str,
+        records_inserted: int = 0,
+        error: Optional[str] = None,
+    ) -> None:
+        row = await self.session.get(GeeBackfillProgress, progress_id)
+        if row is None:
+            raise ValueError(f"unknown backfill progress id {progress_id}")
+        row.status = status
+        row.records_inserted = records_inserted
+        row.error = error
+        row.finished_at = utcnow()
+        await self.session.commit()
+
+    async def reset_backfill(self, dataset: Optional[str] = None) -> int:
+        stmt = sa_delete(GeeBackfillProgress)
+        if dataset:
+            stmt = stmt.where(GeeBackfillProgress.dataset == dataset)
+        result = await self.session.execute(stmt)
+        await self.session.commit()
+        return result.rowcount or 0
 
     # ---------------- run log ----------------
 

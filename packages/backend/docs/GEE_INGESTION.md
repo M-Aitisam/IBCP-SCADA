@@ -319,6 +319,30 @@ chunks (30 days for Sentinel-1/2, 90 for CHIRPS, 365 for MODIS composites) and
 commits after each chunk, so an interrupted run resumes from `backfill_cursor`
 rather than starting over. A single ten-year request is never issued.
 
+### Automated backfill queue
+
+The scheduled `.github/workflows/gee-backfill-automation.yml` workflow plans
+missing windows idempotently, then processes one oldest eligible window per run.
+It uses conservative windows: CHIRPS 30 days, MOD13Q1 60 days, and MOD11A2,
+Sentinel-1, and Sentinel-2 30 days. Failed windows are retried three times;
+the queue then leaves them failed for investigation. The schedule is every four
+hours by default; change the cron to `0 */6 * * *` or `0 */12 * * *` when quota
+pressure requires a slower cadence.
+
+Run from `packages/backend/`:
+
+```bash
+python -m app.ingestion.cli backfill-plan
+python -m app.ingestion.cli backfill-status
+python -m app.ingestion.cli backfill-next
+python -m app.ingestion.cli backfill-reset
+```
+
+Use `BACKFILL_START_DATE`, `BACKFILL_END_DATE`, and comma-separated
+`BACKFILL_DATASETS` to configure the plan. Disable automation by disabling the
+workflow schedule; existing progress remains in `gee_backfill_progress` and
+can be resumed by re-enabling it.
+
 ---
 
 ## 12. Validation
