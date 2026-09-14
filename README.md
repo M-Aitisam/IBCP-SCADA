@@ -1,6 +1,6 @@
-# 📝 Updated README.md with Complete Setup Instructions
+# 📝  README.md with Complete Setup Instructions
 
-Here's your updated `README.md` with all the commands and environment setup instructions.
+Here's your  `README.md` with all the commands and environment setup instructions.
 
 ---
 
