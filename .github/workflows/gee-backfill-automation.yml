@@ -26,22 +26,36 @@ jobs:
   backfill:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    
+    # ═══════════════════════════════════════════════════════
+    #  MATRIX STRATEGY: Run 3 chunks in parallel per run
+    # ═══════════════════════════════════════════════════════
+    strategy:
+      matrix:
+        chunk: [1, 2, 3]
+      fail-fast: false
+    
     defaults:
       run:
         working-directory: packages/backend
+    
     steps:
       - uses: actions/checkout@v4
+      
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: packages/backend/requirements.txt
+      
       - name: Install dependencies
         run: pip install -r requirements.txt
+      
       - name: Apply database migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: alembic upgrade head
+      
       - name: Plan missing chunks
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -49,7 +63,8 @@ jobs:
           BACKFILL_END_DATE: ${{ inputs.end_date || vars.GEE_TARGET_END }}
           BACKFILL_DATASETS: ${{ inputs.datasets || vars.GEE_BACKFILL_DATASETS }}
         run: python -m app.ingestion.cli backfill-plan | tee "$GITHUB_STEP_SUMMARY"
-      - name: Process oldest eligible chunk
+      
+      - name: Process chunk ${{ matrix.chunk }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           GEE_PROJECT_ID: ${{ secrets.GEE_PROJECT_ID }}
@@ -58,6 +73,7 @@ jobs:
           GEE_ROI_GEOJSON_PATH: ${{ vars.GEE_ROI_GEOJSON_PATH }}
           GEE_ROI_PROVINCES: ${{ vars.GEE_ROI_PROVINCES }}
         run: python -m app.ingestion.cli backfill-next | tee -a "$GITHUB_STEP_SUMMARY"
+      
       - name: Show queue status
         if: always()
         env:
