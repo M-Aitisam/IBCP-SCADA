@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 # How long a lock survives without renewal. Long enough that a slow GEE chunk
 # never loses its lease, short enough that a crashed run frees the dataset the
 # same night rather than blocking the next cron.
-DEFAULT_LOCK_LEASE_SECONDS = 3600
+DEFAULT_LOCK_LEASE_SECONDS = 300
 
 # Rows per INSERT ... ON CONFLICT statement. Keeps parameter counts well under
 # the Postgres 65535-bind limit given ~30 columns per row.
