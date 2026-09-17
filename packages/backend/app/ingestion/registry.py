@@ -144,6 +144,11 @@ class DatasetConfig:
     chunk_days: int = 30
     # Pixel-level mask strategy, resolved in extractor.py.
     mask_strategy: Optional[str] = None
+    # Passed to reduceRegions. GEE splits work into tileScale^2 server-side
+    # sub-tiles, which helps a dense, high-resolution collection (Sentinel)
+    # avoid "Computation timed out" over a large ROI. Left at 1 (GEE's
+    # default) for sparse/coarse products that don't need it.
+    tile_scale: int = 1
 
     @property
     def all_metrics(self) -> tuple[str, ...]:
@@ -207,6 +212,7 @@ DATASETS: dict[str, DatasetConfig] = {
         metadata_properties=("MGRS_TILE", "SENSING_ORBIT_NUMBER", "SPACECRAFT_NAME"),
         mask_strategy="s2_scl",
         chunk_days=30,
+        tile_scale=4,
     ),
     "mod13q1": DatasetConfig(
         name="mod13q1",
@@ -331,6 +337,7 @@ DATASETS: dict[str, DatasetConfig] = {
             ),
         ),
         chunk_days=30,
+        tile_scale=4,
     ),
 }
 

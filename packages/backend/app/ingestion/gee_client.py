@@ -40,6 +40,12 @@ _TRANSIENT_MARKERS = (
     "503",
     "502",
     "429",
+    # GEE's hard per-request element cap. Deterministic given the same
+    # request, so a bare retry never succeeds - extractor.py batches images
+    # to stay under this cap. Listed as transient (not permanent) because a
+    # smaller/rebatched retry of the *same operation* can still succeed.
+    "accumulating over",
+    "5000 element",
 )
 
 _PERMANENT_MARKERS = (
