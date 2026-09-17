@@ -42,6 +42,16 @@ logger = logging.getLogger(__name__)
 # same night rather than blocking the next cron.
 DEFAULT_LOCK_LEASE_SECONDS = 300
 
+# How long a backfill chunk may sit "running" before it is presumed stranded
+# (its worker process was killed - e.g. a GitHub Actions job cancellation -
+# without reaching the finally/except that calls finish_backfill). This is
+# deliberately larger than DEFAULT_LOCK_LEASE_SECONDS: a chunk that is merely
+# slow (heavy GEE reduce, backoff retries) must not be reclaimed and
+# double-processed by another worker while it is still genuinely in flight.
+# Sized to comfortably exceed one chunk's worst-case runtime within a single
+# CI job timeout, not to match the lock lease.
+STRANDED_BACKFILL_SECONDS = 2400
+
 # Rows per INSERT ... ON CONFLICT statement. Keeps parameter counts well under
 # the Postgres 65535-bind limit given ~30 columns per row.
 UPSERT_BATCH_SIZE = 500
@@ -393,9 +403,22 @@ class TimestampRepository:
         return list((await self.session.execute(stmt)).scalars().all())
 
     async def claim_next_backfill(self) -> Optional[GeeBackfillProgress]:
+        stranded_cutoff = utcnow() - timedelta(seconds=STRANDED_BACKFILL_SECONDS)
         eligible = or_(
             GeeBackfillProgress.status == "pending",
             (GeeBackfillProgress.status == "failed")
+            & (GeeBackfillProgress.attempts < 3),
+            # A worker died mid-chunk (SIGKILL, OOM, a cancelled CI job) before
+            # it could call finish_backfill. Reclaiming it here - rather than
+            # requiring a manual reset - is what stops one dead runner from
+            # blocking a dataset indefinitely. attempts is incremented and
+            # started_at reset by the claim below, exactly as for any other
+            # row, so a chunk that is genuinely unprocessable still exhausts
+            # its attempts instead of being reclaimed forever. The attempts
+            # cap applies here too, so a chunk that reliably kills its
+            # worker stops being retried rather than looping indefinitely.
+            (GeeBackfillProgress.status == "running")
+            & (GeeBackfillProgress.started_at < stranded_cutoff)
             & (GeeBackfillProgress.attempts < 3),
         )
         row = await self.session.scalar(
