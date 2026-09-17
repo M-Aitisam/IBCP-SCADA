@@ -27,7 +27,7 @@ from app.db.database import AsyncSessionLocal, engine
 from app.ingestion.backfill import planned_rows, validate_datasets
 from app.ingestion.config import ingestion_settings
 from app.ingestion.gee_client import EarthEngineClient, GEEAuthError
-from app.ingestion.pipeline import IngestionPipeline
+from app.ingestion.pipeline import STATUS_SKIPPED_LOCKED, IngestionPipeline
 from app.ingestion.registry import DATASETS, FUTURE_DATASETS, validate_registry
 from app.ingestion.roi import ROIConfigurationError
 from app.ingestion.windows import DateWindow
@@ -125,6 +125,18 @@ async def _run(args: argparse.Namespace) -> int:
             try:
                 result = await pipeline.run(mode="backfill", only=[row.dataset], window_override=window)
                 outcome = result.outcomes[0] if result.outcomes else None
+                if outcome is not None and outcome.status == STATUS_SKIPPED_LOCKED:
+                    # Another worker holds this dataset's lock (e.g. the
+                    # matrix's other jobs, or the daily cron). No GEE work
+                    # happened, so this must not burn one of the row's 3
+                    # attempts - put it back exactly as claim_next_backfill
+                    # found it and let the next poll retry for free.
+                    await real_repo.requeue_backfill(row.id)
+                    print(
+                        f"dataset={row.dataset} chunk={row.chunk_start}..{row.chunk_end} "
+                        "skipped: lock held by another run (not counted as failure)"
+                    )
+                    return 0
                 success = outcome is not None and outcome.status == "success"
                 await real_repo.finish_backfill(row.id, status="completed" if success else "failed", records_inserted=outcome.records_inserted if outcome else 0, error=outcome.error if outcome else "no dataset outcome")
                 print(result.render())
