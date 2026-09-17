@@ -115,10 +115,20 @@ async def _run(args: argparse.Namespace) -> int:
             print(f"Removed {removed} backfill progress row(s).")
             return 0
         if args.command == "backfill-next":
+            # Exit codes are a deliberate contract with the workflow's shell
+            # loop, which cannot otherwise tell "nothing left to do" and
+            # "blocked on a lock, try again shortly" apart from a real
+            # failure - all three used to return 0 or 1 alike, so a polling
+            # loop had no way to back off on contention or stop on an empty
+            # queue without also stopping (or spinning) on the wrong signal.
+            #   0 = chunk completed successfully
+            #   1 = chunk failed (real GEE/processing failure)
+            #   2 = skipped: another worker holds this dataset's lock
+            #   3 = queue empty, nothing pending or retryable
             row = await real_repo.claim_next_backfill()
             if row is None:
                 print("No pending or retryable backfill chunks remain.")
-                return 0
+                return 3
             window = DateWindow(row.chunk_start, row.chunk_end + timedelta(days=1))
             scoped = settings.model_copy(update={"GEE_HISTORICAL_START": row.chunk_start, "GEE_TARGET_END": row.chunk_end})
             pipeline = IngestionPipeline(store=real_repo, settings=scoped)
@@ -136,7 +146,7 @@ async def _run(args: argparse.Namespace) -> int:
                         f"dataset={row.dataset} chunk={row.chunk_start}..{row.chunk_end} "
                         "skipped: lock held by another run (not counted as failure)"
                     )
-                    return 0
+                    return 2
                 success = outcome is not None and outcome.status == "success"
                 await real_repo.finish_backfill(row.id, status="completed" if success else "failed", records_inserted=outcome.records_inserted if outcome else 0, error=outcome.error if outcome else "no dataset outcome")
                 print(result.render())

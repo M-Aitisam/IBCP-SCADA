@@ -26,36 +26,36 @@ jobs:
   backfill:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    
-    # ═══════════════════════════════════════════════════════
-    #  MATRIX STRATEGY: Run 3 chunks in parallel per run
-    # ═══════════════════════════════════════════════════════
-    strategy:
-      matrix:
-        chunk: [1, 2, 3]
-      fail-fast: false
-    
+
+    # Single job, not the former 3-way matrix. The matrix's 3 parallel
+    # `backfill-next` calls all targeted the same oldest-pending dataset (each
+    # did full GEE auth + ROI resolution before finding the per-dataset lock
+    # held by another one), tripling request pressure on the GEE project for
+    # no extra useful work and contributing to quota exhaustion (429s /
+    # RemoteDisconnected). One job looping through chunks serially, with a
+    # gap between requests, keeps peak request rate down while still getting
+    # through many chunks per invocation.
     defaults:
       run:
         working-directory: packages/backend
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: packages/backend/requirements.txt
-      
+
       - name: Install dependencies
         run: pip install -r requirements.txt
-      
+
       - name: Apply database migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: alembic upgrade head
-      
+
       - name: Plan missing chunks
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -63,8 +63,8 @@ jobs:
           BACKFILL_END_DATE: ${{ inputs.end_date || vars.GEE_TARGET_END }}
           BACKFILL_DATASETS: ${{ inputs.datasets || vars.GEE_BACKFILL_DATASETS }}
         run: python -m app.ingestion.cli backfill-plan | tee "$GITHUB_STEP_SUMMARY"
-      
-      - name: Process chunk ${{ matrix.chunk }}
+
+      - name: Process chunks
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           GEE_PROJECT_ID: ${{ secrets.GEE_PROJECT_ID }}
@@ -72,8 +72,35 @@ jobs:
           GEE_PRIVATE_KEY: ${{ secrets.GEE_PRIVATE_KEY_BASE64 }}
           GEE_ROI_GEOJSON_PATH: ${{ vars.GEE_ROI_GEOJSON_PATH }}
           GEE_ROI_PROVINCES: ${{ vars.GEE_ROI_PROVINCES }}
-        run: python -m app.ingestion.cli backfill-next | tee -a "$GITHUB_STEP_SUMMARY"
-      
+        run: |
+          set +e
+          # backfill-next exit codes (see cli.py):
+          #   0 = chunk completed          -> keep going after a short gap
+          #   1 = chunk failed             -> stop; don't burn quota on a
+          #                                    broken queue
+          #   2 = skipped, lock contention -> no GEE work happened; back off
+          #                                    longer, then retry
+          #   3 = queue empty              -> nothing left to do, stop
+          for i in $(seq 1 15); do
+            echo "════════ Iteration $i ════════"
+            python -m app.ingestion.cli backfill-next
+            status=$?
+            case $status in
+              0)
+                sleep 45
+                ;;
+              2)
+                echo "lock held by another run; backing off before retrying"
+                sleep 120
+                ;;
+              *)
+                echo "backfill-next exited $status; stopping loop"
+                break
+                ;;
+            esac
+          done
+          set -e
+
       - name: Show queue status
         if: always()
         env:
