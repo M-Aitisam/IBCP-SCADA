@@ -203,6 +203,16 @@ class Extractor:
     # Extraction
     # ------------------------------------------------------------------
 
+    # GEE hard-caps any single query at ~5000 accumulated elements
+    # ("Collection query aborted after accumulating over 5000 elements").
+    # Mapping reduceRegions over every image in the window and flattening the
+    # result in one request accumulates (images_in_window * regions)
+    # elements, so a dense collection like Sentinel-1/2 over a large ROI can
+    # blow the cap even with a short date chunk - the limit is per-request
+    # size, not time span, so shrinking chunk_days further would not help.
+    # Batching images so each request stays under the cap fixes it directly.
+    MAX_ELEMENTS_PER_REQUEST = 4500
+
     def extract_chunk(
         self, config: DatasetConfig, start: date, end: date
     ) -> ChunkResult:
@@ -210,10 +220,29 @@ class Extractor:
         ee = self.client.ee
         collection = self.build_collection(config, start, end)
 
-        images_found = self.client.with_retry(
-            lambda: collection.size().getInfo(),
-            description=f"{config.name} count {start}..{end}",
+        # A cheap probe first: two small properties per image, never the
+        # reduced bands, so this call itself never risks the element cap no
+        # matter how many images are in the window.
+        index_fc = ee.FeatureCollection(
+            collection.map(
+                lambda image: ee.Feature(
+                    None,
+                    {
+                        "id": image.get("system:index"),
+                        "t": image.get("system:time_start"),
+                    },
+                )
+            )
         )
+        index_info = self.client.with_retry(
+            lambda: index_fc.getInfo(),
+            description=f"{config.name} image list {start}..{end}",
+        )
+        images = [
+            (f["properties"]["id"], f["properties"]["t"])
+            for f in index_info.get("features", [])
+        ]
+        images_found = len(images)
         if not images_found:
             logger.info(
                 "dataset=%s window=%s..%s images=0 (no source observations)",
@@ -238,44 +267,61 @@ class Extractor:
         scale = config.spatial_resolution
         id_property = self.roi.id_property
 
+        region_count = max(1, len(self.roi.regions))
+        batch_size = max(1, self.MAX_ELEMENTS_PER_REQUEST // region_count)
+        batches = [
+            images[i : i + batch_size] for i in range(0, len(images), batch_size)
+        ]
+
         all_features: list[dict] = []
         for reducer_group, band_names in groups.items():
             reducer = self._reducer_for(reducer_group)
+            # reduceRegions names its outputs "<band>_<stat>" for a
+            # multi-band image but bare "<stat>" for a single-band one.
+            # Record which case this group is so the parser is never
+            # guessing, and so two single-band groups cannot collide.
+            sole_band = band_names[0] if len(band_names) == 1 else ""
 
-            def _reduce_image(image, band_names=band_names, reducer=reducer):
-                prepared = self._prepare_image(image, config).select(band_names)
-                reduced = prepared.reduceRegions(
-                    collection=roi_fc,
-                    reducer=reducer,
-                    scale=scale,
+            for batch_num, batch in enumerate(batches):
+                batch_ids = [image_id for image_id, _ in batch]
+                batch_collection = collection.filter(
+                    ee.Filter.inList("system:index", batch_ids)
                 )
-                # Stamp image-level provenance onto every region feature so the
-                # flattened result is self-describing.
-                # reduceRegions names its outputs "<band>_<stat>" for a
-                # multi-band image but bare "<stat>" for a single-band one.
-                # Record which case this group is so the parser is never
-                # guessing, and so two single-band groups cannot collide.
-                sole_band = band_names[0] if len(band_names) == 1 else ""
-                stamped = reduced.map(
-                    lambda feature: feature.set(
-                        {
-                            "__image_id": image.get("system:index"),
-                            "__time_start": image.get("system:time_start"),
-                            "__sole_band": sole_band,
-                        }
-                    ).copyProperties(image, metadata_props)
+
+                def _reduce_image(
+                    image, band_names=band_names, reducer=reducer, sole_band=sole_band
+                ):
+                    prepared = self._prepare_image(image, config).select(band_names)
+                    reduced = prepared.reduceRegions(
+                        collection=roi_fc,
+                        reducer=reducer,
+                        scale=scale,
+                        tileScale=config.tile_scale,
+                    )
+                    # Stamp image-level provenance onto every region feature
+                    # so the flattened result is self-describing.
+                    return reduced.map(
+                        lambda feature: feature.set(
+                            {
+                                "__image_id": image.get("system:index"),
+                                "__time_start": image.get("system:time_start"),
+                                "__sole_band": sole_band,
+                            }
+                        ).copyProperties(image, metadata_props)
+                    )
+
+                reduced_fc = ee.FeatureCollection(
+                    batch_collection.map(_reduce_image)
+                ).flatten()
+
+                info = self.client.with_retry(
+                    lambda fc=reduced_fc: fc.getInfo(),
+                    description=(
+                        f"{config.name} reduce {reducer_group.value} {start}..{end} "
+                        f"batch {batch_num + 1}/{len(batches)}"
+                    ),
                 )
-                return stamped
-
-            reduced_fc = ee.FeatureCollection(
-                collection.map(_reduce_image)
-            ).flatten()
-
-            info = self.client.with_retry(
-                lambda fc=reduced_fc: fc.getInfo(),
-                description=f"{config.name} reduce {reducer_group.value} {start}..{end}",
-            )
-            all_features.extend(info.get("features", []))
+                all_features.extend(info.get("features", []))
 
         records, latest = self._normalise(config, all_features, id_property)
         logger.info(
