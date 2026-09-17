@@ -454,6 +454,27 @@ class TimestampRepository:
         row.finished_at = utcnow()
         await self.session.commit()
 
+    async def requeue_backfill(self, progress_id: int) -> None:
+        """Undo a claim that never got a real attempt (lock contention).
+
+        claim_next_backfill unconditionally increments attempts and marks the
+        row running, on the assumption the caller will actually run it. When
+        the dataset-level lock is held by another worker (e.g. two matrix
+        jobs racing for the same dataset) no GEE work happened at all, so
+        counting that against the 3-attempt budget would exhaust it on pure
+        contention rather than real failures. This puts the row back exactly
+        as claim_next_backfill found it.
+        """
+        row = await self.session.get(GeeBackfillProgress, progress_id)
+        if row is None:
+            raise ValueError(f"unknown backfill progress id {progress_id}")
+        row.status = "pending"
+        row.attempts = max(0, row.attempts - 1)
+        row.started_at = None
+        row.finished_at = None
+        row.error = None
+        await self.session.commit()
+
     async def reset_backfill(self, dataset: Optional[str] = None) -> int:
         stmt = sa_delete(GeeBackfillProgress)
         if dataset:
