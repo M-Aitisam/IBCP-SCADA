@@ -352,8 +352,10 @@ DATASETS: dict[str, DatasetConfig] = {
         # bounds request *time*, since the element-count cap (4500/regions)
         # allows ~37 images/batch here, which is too much wall-clock work per
         # request for this dataset even though it's well under 5000 elements.
+        # 10 still timed out in production ("batch 1/6" over 60s); halved to
+        # 5 to fit inside GEE's per-request compute limit.
         tile_scale=8,
-        max_images_per_batch=10,
+        max_images_per_batch=5,
     ),
 }
 
