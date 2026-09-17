@@ -149,6 +149,13 @@ class DatasetConfig:
     # avoid "Computation timed out" over a large ROI. Left at 1 (GEE's
     # default) for sparse/coarse products that don't need it.
     tile_scale: int = 1
+    # Caps images-per-reduceRegions-request below what the 5000-element math
+    # alone would allow (extractor.py still takes the smaller of the two).
+    # For a computationally heavy per-pixel product (e.g. SAR despeckling)
+    # the element count is not the binding constraint - request *time* is -
+    # so this bounds batch size directly instead of only bounding elements.
+    # None means the element-based cap is the only limit.
+    max_images_per_batch: Optional[int] = None
 
     @property
     def all_metrics(self) -> tuple[str, ...]:
@@ -337,7 +344,16 @@ DATASETS: dict[str, DatasetConfig] = {
             ),
         ),
         chunk_days=30,
-        tile_scale=4,
+        # SAR reduce is heavier per pixel than optical, and S1 windows carry
+        # more overlapping orbit passes than S2 - both bands (VV+VH) plus the
+        # derived water_fraction come out of the same reduceRegions call.
+        # tileScale=4 alone still timed out at "batch 1/4" in production;
+        # 8 gives GEE twice the server-side sub-tiling. max_images_per_batch
+        # bounds request *time*, since the element-count cap (4500/regions)
+        # allows ~37 images/batch here, which is too much wall-clock work per
+        # request for this dataset even though it's well under 5000 elements.
+        tile_scale=8,
+        max_images_per_batch=10,
     ),
 }
 

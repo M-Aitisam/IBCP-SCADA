@@ -269,6 +269,11 @@ class Extractor:
 
         region_count = max(1, len(self.roi.regions))
         batch_size = max(1, self.MAX_ELEMENTS_PER_REQUEST // region_count)
+        if config.max_images_per_batch is not None:
+            # The element-count cap alone is not always the binding
+            # constraint - a computationally heavy per-pixel reduce can time
+            # out well under 5000 elements. Take the smaller of the two.
+            batch_size = min(batch_size, config.max_images_per_batch)
         batches = [
             images[i : i + batch_size] for i in range(0, len(images), batch_size)
         ]

@@ -11,7 +11,7 @@ BACKFILL_CHUNK_DAYS = {
     "chirps": 30,
     "mod13q1": 60,
     "mod11a2": 30,
-    "sentinel1": 15,
+    "sentinel1": 7,
     "sentinel2": 10,
 }
 MAX_ATTEMPTS = 3
