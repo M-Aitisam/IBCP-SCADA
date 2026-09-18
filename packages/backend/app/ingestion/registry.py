@@ -156,6 +156,8 @@ class DatasetConfig:
     # so this bounds batch size directly instead of only bounding elements.
     # None means the element-based cap is the only limit.
     max_images_per_batch: Optional[int] = None
+    # Pause between successful reduction requests; zero preserves existing pacing.
+    inter_batch_delay_seconds: float = 0.0
 
     @property
     def all_metrics(self) -> tuple[str, ...]:
@@ -356,6 +358,7 @@ DATASETS: dict[str, DatasetConfig] = {
         # images with the client's 180-second HTTP deadline.
         tile_scale=8,
         max_images_per_batch=2,
+        inter_batch_delay_seconds=5.0,
     ),
 }
 
@@ -428,6 +431,10 @@ def validate_dataset(config: DatasetConfig) -> None:
         raise RegistryError(f"{config.name}: spatial_resolution must be positive")
     if config.chunk_days <= 0:
         raise RegistryError(f"{config.name}: chunk_days must be positive")
+    if not 0 <= config.inter_batch_delay_seconds < float("inf"):
+        raise RegistryError(
+            f"{config.name}: inter_batch_delay_seconds must be finite and non-negative"
+        )
 
     metrics = [b.metric for b in config.bands] + [d.metric for d in config.derived]
     duplicates = {m for m in metrics if metrics.count(m) > 1}
