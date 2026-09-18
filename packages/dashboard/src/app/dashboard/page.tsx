@@ -13,7 +13,8 @@ function DashboardContent() {
   const projects = [
     {
       name: 'GeoVision AI',
-      description: 'AI-powered remote sensing for drought & flood prediction',
+      description: 'AI-powered remote yuyu fuck hasnat sensing for drought & flood prediction',
+      
       icon: Satellite,
       href: '/geovision',
       color: 'from-emerald-500 to-green-600',
