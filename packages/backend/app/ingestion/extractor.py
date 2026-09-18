@@ -13,6 +13,7 @@ and pulls the result back with a single getInfo(). That is one round-trip per
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
@@ -279,6 +280,7 @@ class Extractor:
         ]
 
         all_features: list[dict] = []
+        completed_batch = False
         for reducer_group, band_names in groups.items():
             reducer = self._reducer_for(reducer_group)
             # reduceRegions names its outputs "<band>_<stat>" for a
@@ -288,6 +290,10 @@ class Extractor:
             sole_band = band_names[0] if len(band_names) == 1 else ""
 
             for batch_num, batch in enumerate(batches):
+                # Pace successful reductions, including reducer-group boundaries.
+                # Retry backoff remains owned by the client.
+                if completed_batch and config.inter_batch_delay_seconds > 0:
+                    time.sleep(config.inter_batch_delay_seconds)
                 batch_ids = [image_id for image_id, _ in batch]
                 batch_collection = collection.filter(
                     ee.Filter.inList("system:index", batch_ids)
@@ -327,6 +333,7 @@ class Extractor:
                     ),
                 )
                 all_features.extend(info.get("features", []))
+                completed_batch = True
 
         records, latest = self._normalise(config, all_features, id_property)
         logger.info(

@@ -215,6 +215,12 @@ def test_rejects_nonpositive_chunk_days():
         validate_dataset(_config(chunk_days=0))
 
 
+@pytest.mark.parametrize("delay", [-1, float("inf"), float("nan")])
+def test_rejects_invalid_inter_batch_delay(delay):
+    with pytest.raises(RegistryError, match="inter_batch_delay_seconds"):
+        validate_dataset(_config(inter_batch_delay_seconds=delay))
+
+
 def test_rejects_key_name_mismatch():
     with pytest.raises(RegistryError, match="does not match name"):
         validate_registry({"wrong": _config(name="x")})

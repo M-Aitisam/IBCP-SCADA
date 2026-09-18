@@ -7,6 +7,8 @@ unit-correct, provenance-carrying records — without touching Earth Engine.
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from dataclasses import replace
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -22,6 +24,35 @@ from conftest import FakeClient, feature, make_roi, ms
 def extractor(regions: int = 2) -> Extractor:
     roi = make_roi(regions)
     return Extractor(FakeClient(), roi)
+
+
+@pytest.mark.parametrize("image_count,delay", [(0, 5.0), (1, 5.0), (5, 5.0), (5, 0.0)])
+def test_reduction_pacing_only_between_batches(monkeypatch, image_count, delay):
+    client = MagicMock()
+    events = []
+    index = {"features": [
+        {"properties": {"id": str(i), "t": ms(2026, 8, 1)}}
+        for i in range(image_count)
+    ]}
+    responses = iter([index] + [{"features": []}] * ((image_count + 1) // 2))
+
+    def run(operation, description=""):
+        result = next(responses)
+        events.append("index" if "image list" in description else "reduce")
+        return result
+
+    client.with_retry.side_effect = run
+    ex = Extractor(client, make_roi(2))
+    monkeypatch.setattr(ex, "build_collection", MagicMock())
+    monkeypatch.setattr("app.ingestion.extractor.time.sleep", lambda seconds: events.append(seconds))
+    config = replace(DATASETS["sentinel1"], inter_batch_delay_seconds=delay)
+    ex.extract_chunk(config, date(2026, 8, 1), date(2026, 8, 8))
+    expected = ["index"]
+    for batch in range((image_count + 1) // 2):
+        if batch and delay:
+            expected.append(delay)
+        expected.append("reduce")
+    assert events == expected
 
 
 # --- timestamps -------------------------------------------------------------
