@@ -347,15 +347,15 @@ DATASETS: dict[str, DatasetConfig] = {
         # SAR reduce is heavier per pixel than optical, and S1 windows carry
         # more overlapping orbit passes than S2 - both bands (VV+VH) plus the
         # derived water_fraction come out of the same reduceRegions call.
-        # tileScale=4 alone still timed out at "batch 1/4" in production;
-        # 8 gives GEE twice the server-side sub-tiling. max_images_per_batch
-        # bounds request *time*, since the element-count cap (4500/regions)
+        # Keep tileScale=8 while reducing batch work; its runtime benefit
+        # versus 4 needs a live comparison. max_images_per_batch
+        # limits request work, since the element-count cap (4500/regions)
         # allows ~37 images/batch here, which is too much wall-clock work per
         # request for this dataset even though it's well under 5000 elements.
-        # 10 still timed out in production ("batch 1/6" over 60s); halved to
-        # 5 to fit inside GEE's per-request compute limit.
+        # Five-image batches still disconnected in production; try two
+        # images with the client's 180-second HTTP deadline.
         tile_scale=8,
-        max_images_per_batch=5,
+        max_images_per_batch=2,
     ),
 }
 

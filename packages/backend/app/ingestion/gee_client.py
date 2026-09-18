@@ -171,6 +171,9 @@ class EarthEngineClient:
                 # Falls back to whatever ADC is present; this is the local
                 # developer path after `earthengine authenticate`.
                 ee.Initialize(project=project)
+            # Earth Engine expects milliseconds. This bounds the client HTTP
+            # wait, not server compute time or the total time across retries.
+            ee.data.setDeadline(180_000)
         except Exception as exc:  # noqa: BLE001 - surface a scrubbed message
             raise GEEAuthError(
                 f"Earth Engine initialisation failed: {scrub(str(exc))}"
@@ -178,7 +181,7 @@ class EarthEngineClient:
 
         self._ee = ee
         self._initialised = True
-        logger.info("Earth Engine initialised (project=%s)", project)
+        logger.info("Earth Engine initialised (project=%s, HTTP deadline=180s)", project)
 
     def verify(self) -> bool:
         """Round-trip a trivial computation to prove auth actually works."""
