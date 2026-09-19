@@ -59,14 +59,17 @@ def test_sentinel1_preserves_available_metrics(polarizations, expected_vh):
 
 
 @pytest.mark.parametrize("image_count,delay", [(0, 5.0), (1, 5.0), (5, 5.0), (5, 0.0)])
-def test_reduction_pacing_only_between_batches(monkeypatch, image_count, delay):
+@pytest.mark.parametrize("has_vh", [False, True])
+def test_reduction_pacing_only_between_batches(monkeypatch, image_count, delay, has_vh):
     client = MagicMock()
     events = []
     index = {"features": [
-        {"properties": {"id": str(i), "t": ms(2026, 8, 1)}}
+        {"properties": {"id": str(i), "t": ms(2026, 8, 1),
+                        "polarizations": ["VV", "VH"] if has_vh else ["VV"]}}
         for i in range(image_count)
     ]}
-    responses = iter([index] + [{"features": []}] * ((image_count + 1) // 2))
+    batch_count = ((image_count + 1) // 2) * (2 if has_vh else 1)
+    responses = iter([index] + [{"features": []}] * batch_count)
 
     def run(operation, description=""):
         result = next(responses)
@@ -83,7 +86,7 @@ def test_reduction_pacing_only_between_batches(monkeypatch, image_count, delay):
     )
     ex.extract_chunk(config, date(2026, 8, 1), date(2026, 8, 8))
     expected = ["index"]
-    for batch in range((image_count + 1) // 2):
+    for batch in range(batch_count):
         if batch and delay:
             expected.append(delay)
         expected.append("reduce")
@@ -91,6 +94,52 @@ def test_reduction_pacing_only_between_batches(monkeypatch, image_count, delay):
 
 
 # --- timestamps -------------------------------------------------------------
+
+
+@pytest.mark.parametrize("has_vh", [False, True])
+def test_sentinel1_reduces_separate_groups_without_duplicate_metrics(monkeypatch, has_vh):
+    client = MagicMock()
+    ex = Extractor(client, make_roi(1))
+    config = replace(DATASETS["sentinel1"], inter_batch_delay_seconds=0)
+    polarizations = ["VV", "VH"] if has_vh else ["VV"]
+    index = {"features": [{"properties": {
+        "id": "S1", "t": ms(2016, 1, 6), "polarizations": polarizations,
+    }}]}
+    vv = feature("R1", ms(2016, 1, 6), "S1", {
+        "VV_mean": -18, "VV_count": 10, "water_fraction_mean": 0.4,
+        "transmitterReceiverPolarisation": polarizations, "__sole_band": "",
+    })
+    vh = feature("R1", ms(2016, 1, 6), "S1", {
+        "mean": -24, "count": 10, "__sole_band": "VH",
+        "transmitterReceiverPolarisation": polarizations,
+    })
+    responses = [index, {"features": [vv]}]
+    if has_vh:
+        responses.append({"features": [vh]})
+    client.with_retry.side_effect = responses
+    collection = MagicMock()
+    collection.filter.return_value.map.side_effect = lambda fn: fn(MagicMock())
+    monkeypatch.setattr(ex, "build_collection", lambda *args: collection)
+    prepare = MagicMock(return_value=MagicMock())
+    monkeypatch.setattr(ex, "_prepare_image", prepare)
+    result = ex.extract_chunk(config, date(2016, 1, 1), date(2016, 1, 8))
+    prepared_configs = [call.args[1] for call in prepare.call_args_list]
+    assert [[s.band for s in c.bands] for c in prepared_configs] == (
+        [["VV"], ["VH"]] if has_vh else [["VV"]]
+    )
+    assert [s.metric for s in prepared_configs[0].derived] == ["water_fraction"]
+    if has_vh:
+        assert prepared_configs[1].derived == ()
+    assert result.images_found == 1
+    assert len(result.records) == (3 if has_vh else 2)
+    assert {r.metric: r.value for r in result.records} == {
+        "backscatter_vv": -18, "water_fraction": 0.4,
+        **({"backscatter_vh": -24} if has_vh else {}),
+    }
+    descriptions = [c.kwargs["description"] for c in client.with_retry.call_args_list]
+    assert "bands=VV,water_fraction" in descriptions[1]
+    if has_vh:
+        assert "bands=VH" in descriptions[2]
 
 
 def test_epoch_millis_parsed_as_utc():

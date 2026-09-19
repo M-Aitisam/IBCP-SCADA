@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -115,7 +115,7 @@ class Extractor:
         ee = self.client.ee
         masked = self._apply_mask(image, config)
 
-        if config.name == "sentinel1":
+        if config.name == "sentinel1" and any(s.band == "VH" for s in config.bands):
             # Keep a consistent reduction schema without inventing VH pixels.
             # The placeholder is fully masked; real dual-pol VH is untouched.
             masked = ee.Image(ee.Algorithms.If(
@@ -238,6 +238,8 @@ class Extractor:
                     {
                         "id": image.get("system:index"),
                         "t": image.get("system:time_start"),
+                        **({"polarizations": image.get("transmitterReceiverPolarisation")}
+                           if config.name == "sentinel1" else {}),
                     },
                 )
             )
@@ -267,6 +269,20 @@ class Extractor:
         for spec in config.derived:
             groups.setdefault(spec.reducer, []).append(spec.metric)
 
+        reduction_groups = list(groups.items())
+        if config.name == "sentinel1":
+            reduction_groups = []
+            for reducer_group, names in groups.items():
+                vv_names = [name for name in names if name != "VH"]
+                if vv_names:
+                    reduction_groups.append((reducer_group, vv_names))
+                if "VH" in names:
+                    reduction_groups.append((reducer_group, ["VH"]))
+        vh_ids = {
+            f["properties"]["id"] for f in index_info.get("features", [])
+            if "VH" in (f["properties"].get("polarizations") or [])
+        }
+
         metadata_props = list(config.metadata_properties)
         if config.cloud_property:
             metadata_props.append(config.cloud_property)
@@ -282,13 +298,22 @@ class Extractor:
             # constraint - a computationally heavy per-pixel reduce can time
             # out well under 5000 elements. Take the smaller of the two.
             batch_size = min(batch_size, config.max_images_per_batch)
-        batches = [
-            images[i : i + batch_size] for i in range(0, len(images), batch_size)
-        ]
-
         all_features: list[dict] = []
         completed_batch = False
-        for reducer_group, band_names in groups.items():
+        for reducer_group, band_names in reduction_groups:
+            group_config = replace(
+                config,
+                bands=tuple(s for s in config.bands if s.band in band_names),
+                derived=tuple(s for s in config.derived if s.metric in band_names),
+            ) if config.name == "sentinel1" else config
+            group_images = (
+                [image for image in images if image[0] in vh_ids]
+                if config.name == "sentinel1" and band_names == ["VH"] else images
+            )
+            group_batches = [
+                group_images[i:i + batch_size]
+                for i in range(0, len(group_images), batch_size)
+            ]
             reducer = self._reducer_for(reducer_group)
             # reduceRegions names its outputs "<band>_<stat>" for a
             # multi-band image but bare "<stat>" for a single-band one.
@@ -296,7 +321,7 @@ class Extractor:
             # guessing, and so two single-band groups cannot collide.
             sole_band = band_names[0] if len(band_names) == 1 else ""
 
-            for batch_num, batch in enumerate(batches):
+            for batch_num, batch in enumerate(group_batches):
                 # Pace successful reductions, including reducer-group boundaries.
                 # Retry backoff remains owned by the client.
                 if completed_batch and config.inter_batch_delay_seconds > 0:
@@ -307,9 +332,10 @@ class Extractor:
                 )
 
                 def _reduce_image(
-                    image, band_names=band_names, reducer=reducer, sole_band=sole_band
+                    image, band_names=band_names, reducer=reducer, sole_band=sole_band,
+                    group_config=group_config,
                 ):
-                    prepared = self._prepare_image(image, config).select(band_names)
+                    prepared = self._prepare_image(image, group_config).select(band_names)
                     reduced = prepared.reduceRegions(
                         collection=roi_fc,
                         reducer=reducer,
@@ -336,7 +362,8 @@ class Extractor:
                     lambda fc=reduced_fc: fc.getInfo(),
                     description=(
                         f"{config.name} reduce {reducer_group.value} {start}..{end} "
-                        f"batch {batch_num + 1}/{len(batches)}"
+                        f"batch {batch_num + 1}/{len(group_batches)}"
+                        + (f" bands={','.join(band_names)}" if config.name == "sentinel1" else "")
                     ),
                 )
                 all_features.extend(info.get("features", []))

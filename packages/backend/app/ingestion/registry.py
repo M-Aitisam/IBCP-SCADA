@@ -347,8 +347,8 @@ DATASETS: dict[str, DatasetConfig] = {
         ),
         chunk_days=30,
         # SAR reduce is heavier per pixel than optical, and S1 windows carry
-        # more overlapping orbit passes than S2 - both bands (VV+VH) plus the
-        # derived water_fraction come out of the same reduceRegions call.
+        # more overlapping orbit passes than S2. The extractor reduces VV plus
+        # water_fraction separately from VH to bound work per request.
         # Keep tileScale=8 while reducing batch work; its runtime benefit
         # versus 4 needs a live comparison. max_images_per_batch
         # limits request work, since the element-count cap (4500/regions)
