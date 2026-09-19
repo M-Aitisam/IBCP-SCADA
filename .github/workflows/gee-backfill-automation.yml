@@ -59,8 +59,8 @@ jobs:
       - name: Plan missing chunks
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          BACKFILL_START_DATE: ${{ inputs.start_date || vars.GEE_HISTORICAL_START || '2024-01-01' }}
-          BACKFILL_END_DATE: ${{ inputs.end_date || vars.GEE_TARGET_END }}
+          BACKFILL_START_DATE: ${{ inputs.start_date || vars.GEE_HISTORICAL_START || '2016-01-01' }}
+          BACKFILL_END_DATE: ${{ inputs.end_date || vars.GEE_TARGET_END || '2026-08-19' }}
           BACKFILL_DATASETS: ${{ inputs.datasets || vars.GEE_BACKFILL_DATASETS }}
         run: python -m app.ingestion.cli backfill-plan | tee "$GITHUB_STEP_SUMMARY"
 
