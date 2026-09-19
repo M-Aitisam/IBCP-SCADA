@@ -77,7 +77,10 @@ def test_reduction_pacing_only_between_batches(monkeypatch, image_count, delay):
     ex = Extractor(client, make_roi(2))
     monkeypatch.setattr(ex, "build_collection", MagicMock())
     monkeypatch.setattr("app.ingestion.extractor.time.sleep", lambda seconds: events.append(seconds))
-    config = replace(DATASETS["sentinel1"], inter_batch_delay_seconds=delay)
+    config = replace(
+        DATASETS["sentinel1"], max_images_per_batch=2,
+        inter_batch_delay_seconds=delay,
+    )
     ex.extract_chunk(config, date(2026, 8, 1), date(2026, 8, 8))
     expected = ["index"]
     for batch in range((image_count + 1) // 2):
