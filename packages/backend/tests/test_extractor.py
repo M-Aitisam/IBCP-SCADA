@@ -26,6 +26,38 @@ def extractor(regions: int = 2) -> Extractor:
     return Extractor(FakeClient(), roi)
 
 
+def test_sentinel1_collection_requires_vv_but_not_vh():
+    client = MagicMock()
+    collection = client.ee.ImageCollection.return_value
+    collection.filterDate.return_value = collection
+    collection.filterBounds.return_value = collection
+    collection.filter.return_value = collection
+    ex = Extractor(client, make_roi(1))
+    ex.roi.feature_collection = MagicMock()
+    ex.build_collection(DATASETS["sentinel1"], date(2016, 1, 1), date(2016, 1, 8))
+    collection.filterDate.assert_called_once_with("2016-01-01", "2016-01-08")
+    client.ee.Filter.listContains.assert_called_once_with(
+        "transmitterReceiverPolarisation", "VV"
+    )
+
+
+@pytest.mark.parametrize("polarizations,expected_vh", [(["VV"], False), (["VV", "VH"], True)])
+def test_sentinel1_preserves_available_metrics(polarizations, expected_vh):
+    ex = extractor()
+    features = [feature("R1", ms(2016, 1, 6), "S1", {
+        "VV_mean": -18, "VV_count": 10,
+        "VH_mean": -24 if expected_vh else None,
+        "VH_count": 10 if expected_vh else 0,
+        "water_fraction_mean": 0.4,
+        "transmitterReceiverPolarisation": polarizations,
+    })]
+    records, _ = ex._normalise(DATASETS["sentinel1"], features, "__region_id")
+    metrics = {r.metric: r.value for r in records}
+    assert metrics["backscatter_vv"] == -18
+    assert metrics["water_fraction"] == 0.4
+    assert ("backscatter_vh" in metrics) == expected_vh
+
+
 @pytest.mark.parametrize("image_count,delay", [(0, 5.0), (1, 5.0), (5, 5.0), (5, 0.0)])
 def test_reduction_pacing_only_between_batches(monkeypatch, image_count, delay):
     client = MagicMock()

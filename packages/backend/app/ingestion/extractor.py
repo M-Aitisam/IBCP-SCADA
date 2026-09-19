@@ -84,14 +84,12 @@ class Extractor:
                 )
             collection = collection.filter(filter_fn(prop, value))
 
-        # Sentinel-1 carries VV/VH in separate scenes depending on
-        # polarisation; require both bands so reduceRegions never sees a
-        # missing band.
+        # Historical IW scenes can be VV-only. VV supports both backscatter
+        # and water_fraction; missing VH must not discard those observations.
         if config.name == "sentinel1":
-            for band in ("VV", "VH"):
-                collection = collection.filter(
-                    ee.Filter.listContains("transmitterReceiverPolarisation", band)
-                )
+            collection = collection.filter(
+                ee.Filter.listContains("transmitterReceiverPolarisation", "VV")
+            )
 
         return collection
 
@@ -116,6 +114,15 @@ class Extractor:
         """Mask, then select the bands to reduce plus any derived band."""
         ee = self.client.ee
         masked = self._apply_mask(image, config)
+
+        if config.name == "sentinel1":
+            # Keep a consistent reduction schema without inventing VH pixels.
+            # The placeholder is fully masked; real dual-pol VH is untouched.
+            masked = ee.Image(ee.Algorithms.If(
+                masked.bandNames().contains("VH"),
+                masked,
+                masked.addBands(ee.Image.constant(0).rename("VH").updateMask(0)),
+            ))
 
         band_names = [spec.band for spec in config.bands]
         prepared = masked.select(band_names)
@@ -404,6 +411,10 @@ class Extractor:
         self, config, spec: BandSpec, props, region, timestamp, observation_date,
         image_id, cloud_pct, metadata,
     ) -> Optional[ObservationRecord]:
+        if (config.name == "sentinel1" and spec.band == "VH"
+                and "transmitterReceiverPolarisation" in metadata
+                and "VH" not in metadata["transmitterReceiverPolarisation"]):
+            return None
         stats = _collect_stats(props, spec.band, spec.reducer)
         if stats is None:
             return None
@@ -510,6 +521,10 @@ class Extractor:
                 .filterBounds(geometry)
                 .filterDate(start, end)
             )
+            if config.name == "sentinel1":
+                collection = self.build_collection(
+                    config, date.fromisoformat(start), ceiling + timedelta(days=1)
+                )
 
             millis = self.client.with_retry(
                 lambda c=collection: c.aggregate_max("system:time_start").getInfo(),
