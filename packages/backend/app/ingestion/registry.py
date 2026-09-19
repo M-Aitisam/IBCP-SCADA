@@ -354,10 +354,10 @@ DATASETS: dict[str, DatasetConfig] = {
         # limits request work, since the element-count cap (4500/regions)
         # allows ~37 images/batch here, which is too much wall-clock work per
         # request for this dataset even though it's well under 5000 elements.
-        # Five-image batches still disconnected in production; try two
-        # images with the client's 180-second HTTP deadline.
+        # Two-image batches still timed out in production; try one
+        # image with the client's 180-second HTTP deadline.
         tile_scale=8,
-        max_images_per_batch=2,
+        max_images_per_batch=1,
         inter_batch_delay_seconds=5.0,
     ),
 }
